@@ -1,0 +1,5 @@
+{
+  "name": "Payal Electronics Service Management",
+  "description": "A comprehensive Service & Ticket Management App for an Electronics Store. It handles ticket creation, technician assignment, job tracking, and includes an AI-powered chatbot and image generator.",
+  "requestFramePermissions": []
+}
