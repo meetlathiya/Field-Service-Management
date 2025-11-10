@@ -64,7 +64,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ tickets, onTicketSelect })
         'Product Category', 'Product Model', 'Serial Number', 'Warranty Active',
         'Service Type', 'Issue Description', 'Urgency', 'Status',
         'Assigned Technician', 'Created Date', 'Last Updated', 'Scheduled Date',
-        'Notes', 'Service Charge', 'Parts Charge', 'Total Bill', 'Commission',
+        'Notes', 'Service Charge (₹)', 'Parts Charge (₹)', 'Total Bill (₹)', 'Commission (₹)',
         'Feedback Rating'
     ];
     

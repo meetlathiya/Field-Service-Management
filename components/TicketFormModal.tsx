@@ -45,6 +45,10 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({ isOpen, onClos
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
         const files = Array.from(e.target.files);
+        if (formData.photos.length + files.length > 5) {
+            alert("You can upload a maximum of 5 photos.");
+            return;
+        }
         // FIX: Explicitly type 'file' as 'File' to resolve type inference issue.
         files.forEach((file: File) => {
             const reader = new FileReader();
@@ -151,10 +155,10 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({ isOpen, onClos
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700">Issue Description</label>
-                <textarea name="issueDescription" value={formData.issueDescription} onChange={handleChange} rows={3} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-light focus:ring-primary-light sm:text-sm text-gray-900" required></textarea>
+                <textarea name="issueDescription" value={formData.issueDescription} onChange={handleChange} rows={3} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-light focus:ring-primary-light sm:text-sm text-gray-900"></textarea>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700">Add Photos (Optional)</label>
+                <label className="block text-sm font-medium text-gray-700">Add Photos (Optional, up to 5)</label>
                 <div className="mt-2 flex items-center flex-wrap gap-4">
                    {formData.photos.map((photo, index) => (
                       <div key={index} className="relative">
@@ -169,11 +173,13 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({ isOpen, onClos
                         </button>
                       </div>
                    ))}
-                  <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50 text-gray-500">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 4v16m8-8H4" /></svg>
-                    <span className="text-xs mt-1">Add Image</span>
-                    <input type="file" multiple accept="image/*" onChange={handlePhotoUpload} className="hidden" />
-                  </label>
+                   {formData.photos.length < 5 && (
+                      <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50 text-gray-500">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 4v16m8-8H4" /></svg>
+                        <span className="text-xs mt-1">Add Image</span>
+                        <input type="file" multiple accept="image/*" capture="environment" onChange={handlePhotoUpload} className="hidden" />
+                      </label>
+                   )}
                 </div>
               </div>
             </fieldset>
@@ -181,11 +187,11 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({ isOpen, onClos
                 <fieldset className="border p-4 rounded-md space-y-4">
                     <legend className="text-lg font-semibold px-2">Charges (Optional)</legend>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Service Charge ($)</label>
+                        <label className="block text-sm font-medium text-gray-700">Service Charge (₹)</label>
                         <input type="number" name="serviceCharge" value={formData.serviceCharge} onChange={handleChange} min="0" step="0.01" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-light focus:ring-primary-light sm:text-sm text-gray-900" />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700">Parts Charge ($)</label>
+                        <label className="block text-sm font-medium text-gray-700">Parts Charge (₹)</label>
                         <input type="number" name="partsCharge" value={formData.partsCharge} onChange={handleChange} min="0" step="0.01" className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-light focus:ring-primary-light sm:text-sm text-gray-900" />
                     </div>
                 </fieldset>

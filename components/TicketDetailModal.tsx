@@ -63,6 +63,10 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, on
     const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
             const files = Array.from(e.target.files);
+            if (ticket.photos.length + files.length > 5) {
+                alert("You can upload a maximum of 5 photos per ticket.");
+                return;
+            }
             const newPhotos: string[] = [];
             let filesProcessed = 0;
 
@@ -149,15 +153,17 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, on
                                     )}
                                 </div>
                                 <div>
-                                    <label className="text-sm font-medium text-gray-500">Job Photos</label>
+                                    <label className="text-sm font-medium text-gray-500">Job Photos (up to 5)</label>
                                     <div className="mt-2 flex flex-wrap gap-2">
                                         {ticket.photos.map((photo, index) => (
                                             <img key={index} src={photo} alt={`Job photo ${index+1}`} className="w-24 h-24 object-cover rounded-md" />
                                         ))}
-                                        <label className="w-24 h-24 flex items-center justify-center border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
-                                            <span className="text-gray-500 text-3xl">+</span>
-                                            <input type="file" multiple accept="image/*" onChange={handlePhotoUpload} className="hidden" />
-                                        </label>
+                                        {ticket.photos.length < 5 && (
+                                            <label className="w-24 h-24 flex items-center justify-center border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
+                                                <span className="text-gray-500 text-3xl">+</span>
+                                                <input type="file" multiple accept="image/*" capture="environment" onChange={handlePhotoUpload} className="hidden" />
+                                            </label>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -167,20 +173,20 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, on
                                 <h3 className="font-semibold text-lg mb-4 text-gray-700">Charges & Payment</h3>
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 items-end">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700">Service Charge ($)</label>
+                                        <label className="block text-sm font-medium text-gray-700">Service Charge (₹)</label>
                                         <input type="number" value={ticket.serviceCharge} onChange={e => handleUpdate('serviceCharge', parseFloat(e.target.value))} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-light focus:ring-primary-light sm:text-sm"/>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700">Parts Charge ($)</label>
+                                        <label className="block text-sm font-medium text-gray-700">Parts Charge (₹)</label>
                                         <input type="number" value={ticket.partsCharge} onChange={e => handleUpdate('partsCharge', parseFloat(e.target.value))} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-light focus:ring-primary-light sm:text-sm"/>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700">Commission ($)</label>
+                                        <label className="block text-sm font-medium text-gray-700">Commission (₹)</label>
                                         <input type="number" value={ticket.commission} onChange={e => handleUpdate('commission', parseFloat(e.target.value))} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-light focus:ring-primary-light sm:text-sm"/>
                                     </div>
                                     <div className="text-right">
                                          <p className="text-sm font-medium text-gray-500">Total Bill</p>
-                                         <p className="text-2xl font-bold text-primary-dark">${totalBill.toFixed(2)}</p>
+                                         <p className="text-2xl font-bold text-primary-dark">₹{totalBill.toFixed(2)}</p>
                                     </div>
                                 </div>
                             </div>
