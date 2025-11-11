@@ -38,7 +38,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ tickets, onUpdat
   const handleAttachImage = () => {
     if (!generatedImage || !selectedTicketId) return;
     
-    const ticketToUpdate = tickets.find(t => t.id === selectedTicketId);
+    const ticketToUpdate = tickets.find(t => t.firestoreDocId === selectedTicketId);
     if (!ticketToUpdate) {
         setAttachStatus('error');
         return;
@@ -119,7 +119,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ tickets, onUpdat
                             >
                                 <option value="" disabled>Select a ticket...</option>
                                 {openTickets.map(ticket => (
-                                    <option key={ticket.id} value={ticket.id}>
+                                    <option key={ticket.firestoreDocId} value={ticket.firestoreDocId}>
                                         {ticket.id} - {ticket.customerName}
                                     </option>
                                 ))}

@@ -8,7 +8,7 @@ interface TicketDetailModalProps {
   isOpen: boolean;
   onClose: () => void;
   ticket: Ticket;
-  onUpdate: (ticketId: string, updates: TicketUpdatePayload) => void;
+  onUpdate: (firestoreDocId: string, updates: TicketUpdatePayload) => void;
 }
 
 const statusColors: { [key in TicketStatus]: string } = {
@@ -47,8 +47,8 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, on
     const [notes, setNotes] = useState(ticket.notes);
     
     const handleUpdate = useCallback(<K extends keyof TicketUpdatePayload>(field: K, value: TicketUpdatePayload[K]) => {
-        onUpdate(ticket.id, { [field]: value });
-    }, [onUpdate, ticket.id]);
+        onUpdate(ticket.firestoreDocId, { [field]: value });
+    }, [onUpdate, ticket.firestoreDocId]);
     
     const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { value } = e.target;

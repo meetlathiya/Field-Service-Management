@@ -18,6 +18,8 @@ const idPrefix = `PE-${month}${year}`;
 
 export const INITIAL_TICKETS: Ticket[] = [
   {
+    // FIX: Add missing firestoreDocId property.
+    firestoreDocId: 'mock-001',
     id: `${idPrefix}-001`,
     customerName: 'Alice Williams',
     phone: '123-456-7890',
@@ -41,6 +43,8 @@ export const INITIAL_TICKETS: Ticket[] = [
     scheduledDate: new Date(),
   },
   {
+    // FIX: Add missing firestoreDocId property.
+    firestoreDocId: 'mock-002',
     id: `${idPrefix}-002`,
     customerName: 'Bob Johnson',
     phone: '098-765-4321',
@@ -65,6 +69,8 @@ export const INITIAL_TICKETS: Ticket[] = [
     scheduledDate: new Date(new Date().setDate(new Date().getDate() + 1)),
   },
     {
+    // FIX: Add missing firestoreDocId property.
+    firestoreDocId: 'mock-003',
     id: `${idPrefix}-003`,
     customerName: 'Charlie Brown',
     phone: '555-555-5555',

@@ -1,22 +1,7 @@
-
-
-import { GoogleGenAI, Chat } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import { Ticket } from '../types';
-import { INITIAL_TICKETS } from '../constants';
-
-// System instruction to make Gemini act as a key-value store.
-const SYSTEM_INSTRUCTION = `
-You are a highly reliable JSON data store for a ticket management application.
-Your entire purpose is to store and retrieve a single JSON array of ticket objects.
-You will hold the state in your memory.
-When I send "GET_STATE", you MUST respond ONLY with the JSON array of tickets you have in memory, and nothing else.
-If you have no data in memory, you MUST respond with the exact string "NO_DATA".
-When I send "UPDATE_STATE:" followed by a JSON array, you MUST store this new array, overwriting any previous data. After storing it, you MUST respond ONLY with the exact string "OK", and nothing else.
-Do not add any commentary, greetings, or extra text to your responses. Stick to the protocol strictly.
-`;
 
 let ai: GoogleGenAI;
-let dataStoreChat: Chat;
 
 // Singleton pattern to initialize the AI instance only once.
 const getAiInstance = () => {
@@ -31,70 +16,23 @@ const getAiInstance = () => {
     return ai;
 }
 
-// Singleton for the data store chat session.
-const getDataStoreChat = () => {
-    if (!dataStoreChat) {
-        const aiInstance = getAiInstance();
-        dataStoreChat = aiInstance.chats.create({
-            model: 'gemini-2.5-flash', // A fast and efficient model for this task
-            config: {
-                systemInstruction: SYSTEM_INSTRUCTION,
-            }
-        });
-    }
-    return dataStoreChat;
-}
-
-// Function to safely parse JSON from Gemini's response
-const parseTicketsFromResponse = (text: string): Ticket[] | null => {
-    try {
-        // The model might wrap the JSON in markdown backticks, so we clean it up.
-        const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        if (cleanText === "NO_DATA") {
-            return null;
-        }
-        const parsed = JSON.parse(cleanText) as Ticket[];
-        // Revive Date objects which are stored as strings in JSON
-        return parsed.map(ticket => ({
-            ...ticket,
-            createdAt: new Date(ticket.createdAt),
-            updatedAt: new Date(ticket.updatedAt),
-            scheduledDate: ticket.scheduledDate ? new Date(ticket.scheduledDate) : null,
-        }));
-    } catch (e) {
-        console.error("Failed to parse tickets from Gemini response:", e);
-        console.error("Original response text:", text);
-        // If parsing fails, it's safer to return the initial state to avoid crashing.
-        return INITIAL_TICKETS;
-    }
-};
-
 export const geminiService = {
-    getCloudState: async (): Promise<Ticket[]> => {
-        const chatSession = getDataStoreChat();
-        const response = await chatSession.sendMessage({ message: "GET_STATE" });
-        const tickets = parseTicketsFromResponse(response.text);
+    generateImage: async (prompt: string): Promise<string> => {
+        const aiInstance = getAiInstance();
+        const response = await aiInstance.models.generateImages({
+            model: 'imagen-4.0-generate-001',
+            prompt: prompt,
+            config: {
+                numberOfImages: 1,
+                outputMimeType: 'image/png',
+            },
+        });
 
-        if (tickets === null) {
-            // This is the first run, so we initialize the state in the cloud.
-            console.log("No data found in cloud, initializing with default tickets.");
-            await geminiService.updateCloudState(INITIAL_TICKETS);
-            return INITIAL_TICKETS;
+        if (response.generatedImages && response.generatedImages.length > 0 && response.generatedImages[0].image.imageBytes) {
+            return response.generatedImages[0].image.imageBytes;
         }
 
-        return tickets;
-    },
-
-    updateCloudState: async (tickets: Ticket[]): Promise<void> => {
-        const chatSession = getDataStoreChat();
-        // Use a reviver to ensure dates are stored in a consistent ISO format
-        const jsonString = JSON.stringify(tickets);
-        const response = await chatSession.sendMessage({ message: `UPDATE_STATE:${jsonString}`});
-        
-        if (response.text.trim() !== "OK") {
-            console.warn("Gemini did not confirm state update correctly. Response:", response.text);
-            // Optionally, we could add retry logic here.
-        }
+        throw new Error("Image generation failed or returned no images.");
     },
 
     getChatbotResponse: async (query: string, tickets: Ticket[]): Promise<string> => {
@@ -121,23 +59,5 @@ export const geminiService = {
         });
 
         return response.text;
-    },
-
-    // FIX: Add generateImage method to provide image generation functionality.
-    generateImage: async (prompt: string): Promise<string> => {
-        const aiInstance = getAiInstance();
-        const response = await aiInstance.models.generateImages({
-            model: 'imagen-4.0-generate-001',
-            prompt: prompt,
-            config: {
-                numberOfImages: 1,
-            },
-        });
-
-        if (response.generatedImages && response.generatedImages.length > 0) {
-            return response.generatedImages[0].image.imageBytes;
-        }
-
-        throw new Error("Image generation failed or returned no images.");
     },
 };

@@ -25,7 +25,8 @@ export interface Technician {
 }
 
 export interface Ticket {
-  id: string;
+  firestoreDocId: string; // The unique ID from the Firestore document
+  id: string; // The human-readable ID like PE-JUL24-001
   customerName: string;
   phone: string;
   address: string;
@@ -51,7 +52,7 @@ export interface Ticket {
   customerSignature?: string; // base64 image string
 }
 
-export type TicketUpdatePayload = Partial<Omit<Ticket, 'id' | 'createdAt'>>;
+export type TicketUpdatePayload = Partial<Omit<Ticket, 'id' | 'createdAt' | 'firestoreDocId'>>;
 
 export enum AppView {
   Dashboard,

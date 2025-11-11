@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback } from 'react';
 import { Header } from './components/Header';
 import { Dashboard } from './components/Dashboard';
@@ -9,10 +8,14 @@ import { PlusIcon } from './components/Icons';
 import { AppView, Ticket, TicketUpdatePayload } from './types';
 import { useTickets } from './hooks/useTickets';
 import { Chatbot } from './components/Chatbot';
+import { useAuth } from './hooks/useAuth';
+import { Login } from './components/Login';
+import { authService } from './services/authService';
 
 const App: React.FC = () => {
+  const { currentUser, isLoading: isAuthLoading } = useAuth();
   const [currentView, setCurrentView] = useState<AppView>(AppView.Dashboard);
-  const { tickets, addTicket, updateTicket, isLoading } = useTickets();
+  const { tickets, addTicket, updateTicket, isLoading: areTicketsLoading } = useTickets();
 
   const [isNewTicketModalOpen, setIsNewTicketModalOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
@@ -25,25 +28,28 @@ const App: React.FC = () => {
     setSelectedTicket(null);
   }, []);
 
-  const handleUpdateTicket = useCallback((ticketId: string, updates: TicketUpdatePayload) => {
-    updateTicket(ticketId, updates);
-    if(selectedTicket && selectedTicket.id === ticketId) {
-      // Optimistically update the selected ticket in the modal
+  const handleUpdateTicket = useCallback((firestoreDocId: string, updates: TicketUpdatePayload) => {
+    updateTicket(firestoreDocId, updates);
+    if(selectedTicket && selectedTicket.firestoreDocId === firestoreDocId) {
       const updatedTime = new Date();
       setSelectedTicket(prev => prev ? {...prev, ...updates, updatedAt: updatedTime} : null);
     }
   }, [updateTicket, selectedTicket]);
+  
+  const handleSignOut = async () => {
+      await authService.signOutUser();
+  };
 
   const renderView = () => {
-    if (isLoading) {
+    if (areTicketsLoading) {
       return (
         <div className="flex-1 flex items-center justify-center">
           <div className="text-center">
-            <svg className="animate-spin h-10 w-10 text-primary mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <svg className="animate-spin h-10 w-10 text-primary mx-auto" xmlns="http://www.w.org/2000/svg" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
-            <p className="mt-2 text-lg text-gray-600">Loading Tickets...</p>
+            <p className="mt-2 text-lg text-gray-600">Loading Tickets from Firestore...</p>
           </div>
         </div>
       );
@@ -59,9 +65,29 @@ const App: React.FC = () => {
     }
   };
 
+  if (isAuthLoading) {
+     return (
+        <div className="h-screen w-screen flex items-center justify-center bg-background">
+            <svg className="animate-spin h-12 w-12 text-primary" xmlns="http://www.w.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+        </div>
+      );
+  }
+  
+  if (!currentUser) {
+      return <Login />;
+  }
+
   return (
     <div className="h-screen w-screen flex flex-col font-sans bg-background text-gray-900">
-      <Header currentView={currentView} onNavigate={setCurrentView} />
+      <Header 
+        currentView={currentView} 
+        onNavigate={setCurrentView} 
+        user={currentUser}
+        onSignOut={handleSignOut}
+      />
       <div className="flex-1 flex flex-col overflow-hidden relative">
           {renderView()}
       </div>

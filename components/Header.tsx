@@ -1,14 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { AppView } from '../types';
 import { DashboardIcon, CalendarIcon, MenuIcon, CloseIcon } from './Icons';
+// FIX: User type is now on the firebase namespace, imported from firebaseConfig to ensure v8 compatibility.
+import firebase from '../services/firebaseConfig';
 
 interface HeaderProps {
   currentView: AppView;
   onNavigate: (view: AppView) => void;
+  user: firebase.User;
+  onSignOut: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
+export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, user, onSignOut }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
 
   const navItems = [
     { view: AppView.Dashboard, label: 'Dashboard', icon: <DashboardIcon className="w-5 h-5 mr-2" /> },
@@ -19,6 +25,18 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
     onNavigate(view);
     setIsMenuOpen(false);
   }
+
+  // Close user menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+        if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+            setIsUserMenuOpen(false);
+        }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [userMenuRef]);
+
 
   return (
     <header className="bg-primary-dark shadow-md sticky top-0 z-20">
@@ -48,6 +66,29 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
               </div>
             </div>
           </div>
+          <div className="hidden md:block">
+            <div className="ml-4 flex items-center md:ml-6">
+                 <div className="relative" ref={userMenuRef}>
+                    <div>
+                        <button onClick={() => setIsUserMenuOpen(!isUserMenuOpen)} className="max-w-xs bg-primary-dark rounded-full flex items-center text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-primary-dark focus:ring-white">
+                            <span className="sr-only">Open user menu</span>
+                            <img className="h-8 w-8 rounded-full" src={user.photoURL || undefined} alt="User avatar" />
+                        </button>
+                    </div>
+                    {isUserMenuOpen && (
+                         <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 z-30">
+                            <div className="px-4 py-2 border-b">
+                                <p className="text-sm text-gray-700 font-semibold truncate">{user.displayName}</p>
+                                <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                            </div>
+                            <button onClick={onSignOut} className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
+                                Sign out
+                            </button>
+                        </div>
+                    )}
+                </div>
+            </div>
+          </div>
           <div className="-mr-2 flex md:hidden">
             <button
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -67,7 +108,7 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
                         <button
                             key={item.label}
                             onClick={() => handleNavClick(item.view)}
-                            className={`w-full flex items-center px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 ${
+                            className={`w-full text-left flex items-center px-3 py-2 rounded-md text-base font-medium transition-colors duration-200 ${
                             currentView === item.view
                                 ? 'bg-primary-light text-white'
                                 : 'text-gray-300 hover:bg-primary-light hover:text-white'
@@ -77,6 +118,22 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate }) => {
                             {item.label}
                         </button>
                     ))}
+                </div>
+                 <div className="pt-4 pb-3 border-t border-primary-light">
+                    <div className="flex items-center px-5">
+                        <div className="flex-shrink-0">
+                            <img className="h-10 w-10 rounded-full" src={user.photoURL || undefined} alt="User avatar" />
+                        </div>
+                        <div className="ml-3">
+                            <div className="text-base font-medium leading-none text-white">{user.displayName}</div>
+                            <div className="text-sm font-medium leading-none text-gray-400">{user.email}</div>
+                        </div>
+                    </div>
+                    <div className="mt-3 px-2 space-y-1">
+                        <button onClick={onSignOut} className="w-full text-left block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-primary-light">
+                            Sign out
+                        </button>
+                    </div>
                 </div>
             </div>
         )}
