@@ -11,6 +11,27 @@ interface HeaderProps {
   onSignOut: () => void;
 }
 
+const UserAvatar: React.FC<{ user: firebase.User }> = ({ user }) => {
+    const getInitials = () => {
+        if (user.displayName) return user.displayName.charAt(0).toUpperCase();
+        if (user.email) return user.email.charAt(0).toUpperCase();
+        return '?';
+    };
+
+    return (
+         <div className="h-8 w-8 rounded-full flex items-center justify-center">
+            {user.photoURL ? (
+                <img className="h-full w-full rounded-full" src={user.photoURL} alt="User avatar" />
+            ) : (
+                <div className="h-full w-full rounded-full bg-secondary text-primary-dark flex items-center justify-center font-bold text-lg">
+                    {getInitials()}
+                </div>
+            )}
+        </div>
+    );
+};
+
+
 export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, user, onSignOut }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -72,13 +93,13 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, user, o
                     <div>
                         <button onClick={() => setIsUserMenuOpen(!isUserMenuOpen)} className="max-w-xs bg-primary-dark rounded-full flex items-center text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-primary-dark focus:ring-white">
                             <span className="sr-only">Open user menu</span>
-                            <img className="h-8 w-8 rounded-full" src={user.photoURL || undefined} alt="User avatar" />
+                            <UserAvatar user={user} />
                         </button>
                     </div>
                     {isUserMenuOpen && (
                          <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 z-30">
                             <div className="px-4 py-2 border-b">
-                                <p className="text-sm text-gray-700 font-semibold truncate">{user.displayName}</p>
+                                <p className="text-sm text-gray-700 font-semibold truncate">{user.displayName || 'User'}</p>
                                 <p className="text-xs text-gray-500 truncate">{user.email}</p>
                             </div>
                             <button onClick={onSignOut} className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
@@ -122,7 +143,7 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, user, o
                  <div className="pt-4 pb-3 border-t border-primary-light">
                     <div className="flex items-center px-5">
                         <div className="flex-shrink-0">
-                            <img className="h-10 w-10 rounded-full" src={user.photoURL || undefined} alt="User avatar" />
+                           <UserAvatar user={user} />
                         </div>
                         <div className="ml-3">
                             <div className="text-base font-medium leading-none text-white">{user.displayName}</div>

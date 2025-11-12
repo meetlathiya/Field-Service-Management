@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Ticket, ServiceType, UrgencyLevel } from '../types';
 import { PRODUCT_CATEGORIES } from '../constants';
-import { CloseIcon } from './Icons';
+import { CloseIcon, CameraIcon, PhotoIcon } from './Icons';
 import { firebaseService } from '../services/firebaseService';
 
 interface TicketFormModalProps {
@@ -40,6 +40,47 @@ const UploadingIndicator: React.FC = () => (
     </div>
 );
 
+const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 1280;
+                const MAX_HEIGHT = 1280;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+                } else {
+                    if (height > MAX_HEIGHT) {
+                        width *= MAX_HEIGHT / height;
+                        height = MAX_HEIGHT;
+                    }
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    return reject(new Error('Could not get canvas context'));
+                }
+                ctx.drawImage(img, 0, 0, width, height);
+                resolve(canvas.toDataURL('image/jpeg', 0.8));
+            };
+            img.onerror = (error) => reject(error);
+        };
+        reader.onerror = (error) => reject(error);
+    });
+};
+
+
 export const TicketFormModal: React.FC<TicketFormModalProps> = ({ isOpen, onClose, onSave }) => {
   const [formData, setFormData] = useState<any>(initialFormState);
   const [isUploading, setIsUploading] = useState(false);
@@ -63,27 +104,14 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({ isOpen, onClos
         }
 
         setIsUploading(true);
-        const uploadPromises = files.map(file => {
-            return new Promise<string>((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = async (event) => {
-                    if (event.target && typeof event.target.result === 'string') {
-                        try {
-                            const imageUrl = await firebaseService.uploadImage(event.target.result, 'ticket-photos');
-                            resolve(imageUrl);
-                        } catch (error) {
-                            reject(error);
-                        }
-                    } else {
-                        reject(new Error("Failed to read file"));
-                    }
-                };
-                reader.onerror = error => reject(error);
-                reader.readAsDataURL(file);
-            });
-        });
-
         try {
+            const compressionPromises = files.map(compressImage);
+            const compressedImages = await Promise.all(compressionPromises);
+
+            const uploadPromises = compressedImages.map(imgDataUrl =>
+                firebaseService.uploadImage(imgDataUrl, 'ticket-photos')
+            );
+
             const newImageUrls = await Promise.all(uploadPromises);
             setFormData(prev => ({...prev, photos: [...prev.photos, ...newImageUrls]}));
         } catch (error) {
@@ -91,7 +119,6 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({ isOpen, onClos
             alert("An error occurred while uploading photos. Please try again.");
         } finally {
             setIsUploading(false);
-            // Reset file input to allow re-uploading the same file if needed
             e.target.value = '';
         }
     }
@@ -210,11 +237,18 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({ isOpen, onClos
                    ))}
                    {isUploading && <UploadingIndicator />}
                    {formData.photos.length < 5 && !isUploading && (
-                      <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50 text-gray-500">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 4v16m8-8H4" /></svg>
-                        <span className="text-xs mt-1">Add Image</span>
-                        <input type="file" multiple accept="image/*" capture="environment" onChange={handlePhotoUpload} className="hidden" disabled={isUploading} />
-                      </label>
+                      <div className="flex gap-4">
+                        <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50 text-gray-500">
+                          <CameraIcon className="h-8 w-8" />
+                          <span className="text-xs mt-1">Take Photo</span>
+                          <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} className="hidden" disabled={isUploading} />
+                        </label>
+                         <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50 text-gray-500">
+                          <PhotoIcon className="h-8 w-8" />
+                          <span className="text-xs mt-1">From Gallery</span>
+                          <input type="file" multiple accept="image/*" onChange={handlePhotoUpload} className="hidden" disabled={isUploading} />
+                        </label>
+                      </div>
                    )}
                 </div>
               </div>

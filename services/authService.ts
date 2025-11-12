@@ -2,18 +2,24 @@
 import firebase, { auth } from './firebaseConfig';
 
 
-const provider = new firebase.auth.GoogleAuthProvider();
-
 export const authService = {
-    signInWithGoogle: async (): Promise<firebase.User | null> => {
-        try {
-            // FIX: Use v8 signInWithPopup method.
-            const result = await auth.signInWithPopup(provider);
-            return result.user;
-        } catch (error) {
-            console.error("Error during Google sign-in:", error);
-            return null;
+    signInWithEmailAndPassword: async (email, password): Promise<firebase.auth.UserCredential> => {
+        return auth.signInWithEmailAndPassword(email, password);
+    },
+    
+    createUserWithEmailAndPassword: async (email, password): Promise<firebase.auth.UserCredential> => {
+        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        // Set a default display name based on the email
+        if (userCredential.user) {
+            const displayName = email.split('@')[0];
+            await userCredential.user.updateProfile({ displayName });
         }
+        return userCredential;
+    },
+
+    signInWithGoogle: async (): Promise<firebase.auth.UserCredential> => {
+        const provider = new firebase.auth.GoogleAuthProvider();
+        return auth.signInWithPopup(provider);
     },
 
     signOutUser: async (): Promise<void> => {

@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { Ticket, TicketStatus, Technician, TicketUpdatePayload, UrgencyLevel, ServiceType } from '../types';
 import { TECHNICIANS } from '../constants';
-import { CloseIcon, PencilIcon, StarIcon } from './Icons';
+import { CloseIcon, PencilIcon, StarIcon, CameraIcon, PhotoIcon } from './Icons';
 import { SignaturePad } from './SignaturePad';
 import { firebaseService } from '../services/firebaseService';
 
@@ -43,6 +43,46 @@ const formatDateForInput = (date: Date | null | undefined): string => {
     return `${year}-${month}-${day}`;
 };
 
+const compressImage = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = (event) => {
+            const img = new Image();
+            img.src = event.target?.result as string;
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                const MAX_WIDTH = 1280;
+                const MAX_HEIGHT = 1280;
+                let width = img.width;
+                let height = img.height;
+
+                if (width > height) {
+                    if (width > MAX_WIDTH) {
+                        height *= MAX_WIDTH / width;
+                        width = MAX_WIDTH;
+                    }
+                } else {
+                    if (height > MAX_HEIGHT) {
+                        width *= MAX_HEIGHT / height;
+                        height = MAX_HEIGHT;
+                    }
+                }
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    return reject(new Error('Could not get canvas context'));
+                }
+                ctx.drawImage(img, 0, 0, width, height);
+                resolve(canvas.toDataURL('image/jpeg', 0.8));
+            };
+            img.onerror = (error) => reject(error);
+        };
+        reader.onerror = (error) => reject(error);
+    });
+};
+
 export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, onClose, ticket, onUpdate }) => {
     const [isEditingNotes, setIsEditingNotes] = useState(false);
     const [notes, setNotes] = useState(ticket.notes);
@@ -68,21 +108,13 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, on
 
             setIsUploading(true);
             try {
-                 const uploadPromises = files.map(file => {
-                    return new Promise<string>((resolve, reject) => {
-                        const reader = new FileReader();
-                        reader.onload = async (event) => {
-                            if (event.target && typeof event.target.result === 'string') {
-                                try {
-                                    const imageUrl = await firebaseService.uploadImage(event.target.result, 'ticket-photos');
-                                    resolve(imageUrl);
-                                } catch (error) { reject(error); }
-                            } else { reject(new Error("Failed to read file")); }
-                        };
-                        reader.onerror = error => reject(error);
-                        reader.readAsDataURL(file);
-                    });
-                });
+                const compressionPromises = files.map(compressImage);
+                const compressedImages = await Promise.all(compressionPromises);
+
+                const uploadPromises = compressedImages.map(imgDataUrl =>
+                    firebaseService.uploadImage(imgDataUrl, 'ticket-photos')
+                );
+                
                 const newImageUrls = await Promise.all(uploadPromises);
                 handleUpdate('photos', [...ticket.photos, ...newImageUrls]);
             } catch (error) {
@@ -182,10 +214,18 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, on
                                             </div>
                                         )}
                                         {ticket.photos.length < 5 && !isUploading && (
-                                            <label className="w-24 h-24 flex items-center justify-center border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
-                                                <span className="text-gray-500 text-3xl">+</span>
-                                                <input type="file" multiple accept="image/*" capture="environment" onChange={handlePhotoUpload} className="hidden" disabled={isUploading}/>
-                                            </label>
+                                            <div className="flex gap-2">
+                                                <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50 text-gray-500">
+                                                    <CameraIcon className="h-8 w-8" />
+                                                    <span className="text-xs mt-1">Take Photo</span>
+                                                    <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} className="hidden" disabled={isUploading}/>
+                                                </label>
+                                                 <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50 text-gray-500">
+                                                    <PhotoIcon className="h-8 w-8" />
+                                                    <span className="text-xs mt-1">From Gallery</span>
+                                                    <input type="file" multiple accept="image/*" onChange={handlePhotoUpload} className="hidden" disabled={isUploading}/>
+                                                </label>
+                                            </div>
                                         )}
                                     </div>
                                 </div>
