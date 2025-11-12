@@ -1,17 +1,15 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { AppView } from '../types';
 import { DashboardIcon, CalendarIcon, MenuIcon, CloseIcon } from './Icons';
-// FIX: User type is now on the firebase namespace, imported from firebaseConfig to ensure v8 compatibility.
-import firebase from '../services/firebaseConfig';
 
 interface HeaderProps {
   currentView: AppView;
   onNavigate: (view: AppView) => void;
-  user: firebase.User;
+  user: { displayName: string | null; email: string | null; photoURL: string | null; };
   onSignOut: () => void;
 }
 
-const UserAvatar: React.FC<{ user: firebase.User }> = ({ user }) => {
+const UserAvatar: React.FC<{ user: HeaderProps['user'] }> = ({ user }) => {
     const getInitials = () => {
         if (user.displayName) return user.displayName.charAt(0).toUpperCase();
         if (user.email) return user.email.charAt(0).toUpperCase();

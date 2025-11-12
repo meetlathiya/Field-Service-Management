@@ -1,4 +1,5 @@
 // FIX: Update imports to use v8 firebase object from config.
+
 import firebase, { db, storage } from './firebaseConfig';
 import { Ticket, TicketUpdatePayload, TicketStatus } from '../types';
 
