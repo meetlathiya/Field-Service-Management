@@ -6,6 +6,7 @@ import { TicketFormModal } from './components/TicketFormModal';
 import { TicketDetailModal } from './components/TicketDetailModal';
 import { FirestoreRulesWarning } from './components/FirestoreRulesWarning';
 import { FirestoreDatabaseWarning } from './components/FirestoreDatabaseWarning';
+import { StorageRulesWarning } from './components/StorageRulesWarning';
 import { PlusIcon } from './components/Icons';
 import { AppView, Ticket, TicketUpdatePayload } from './types';
 import { useTickets } from './hooks/useTickets';
@@ -31,6 +32,17 @@ const App: React.FC = () => {
 
   const [isNewTicketModalOpen, setIsNewTicketModalOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
+  const [showStorageWarning, setShowStorageWarning] = useState(false);
+  const [lastStorageError, setLastStorageError] = useState<Error | null>(null);
+
+  const handleUploadError = useCallback((error: Error) => {
+    // Firebase storage permission errors have this specific code.
+    // This will trigger our helpful warning modal.
+    if ((error as any).code === 'storage/unauthorized') {
+      setLastStorageError(error);
+      setShowStorageWarning(true);
+    }
+  }, []);
 
   const handleTicketSelect = useCallback((ticket: Ticket) => {
     setSelectedTicket(ticket);
@@ -95,6 +107,7 @@ const App: React.FC = () => {
                 onClick={() => setIsNewTicketModalOpen(true)}
                 className="bg-secondary hover:bg-amber-500 text-primary-dark rounded-full p-4 shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-secondary"
                 aria-label="Create New Ticket"
+                title="Create New Ticket"
             >
                 <PlusIcon className="w-8 h-8" />
             </button>
@@ -105,6 +118,7 @@ const App: React.FC = () => {
         isOpen={isNewTicketModalOpen}
         onClose={() => setIsNewTicketModalOpen(false)}
         onSave={(data) => addTicket(data)}
+        onUploadError={handleUploadError}
       />
 
       {selectedTicket && (
@@ -113,10 +127,11 @@ const App: React.FC = () => {
             onClose={handleCloseDetailModal}
             ticket={selectedTicket}
             onUpdate={handleUpdateTicket}
+            onUploadError={handleUploadError}
         />
       )}
       
-      {ticketsError && (
+      {ticketsError && !ticketsError.message.includes("offline") && (
         <FirestoreRulesWarning error={ticketsError} />
       )}
       
@@ -125,6 +140,10 @@ const App: React.FC = () => {
           error={operationError}
           onClose={clearOperationError}
         />
+      )}
+
+      {showStorageWarning && lastStorageError && (
+        <StorageRulesWarning error={lastStorageError} onClose={() => setShowStorageWarning(false)} />
       )}
     </div>
   );

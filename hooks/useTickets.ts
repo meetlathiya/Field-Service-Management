@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Ticket, TicketUpdatePayload } from '../types';
-import { firebaseService } from '../services/firebaseService';
-import { INITIAL_TICKETS } from '../constants';
+import { firebaseService, initError as firebaseInitError } from '../services/firebaseService';
 
 export const useTickets = () => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -12,6 +11,15 @@ export const useTickets = () => {
   const clearOperationError = useCallback(() => setOperationError(null), []);
 
   useEffect(() => {
+    // First, check if Firebase itself failed to initialize.
+    if (firebaseInitError) {
+      console.error("Firebase initialization failed.", firebaseInitError);
+      setError(firebaseInitError);
+      setTickets([]);
+      setIsLoading(false);
+      return; // Exit early, do not attempt to subscribe.
+    }
+    
     // Subscribe to real-time ticket updates.
     // The `unsubscribe` function is returned by streamTickets and will be called on component unmount.
     const unsubscribe = firebaseService.streamTickets(
@@ -23,8 +31,7 @@ export const useTickets = () => {
         (err) => {
             console.error("Failed to stream tickets:", err);
             setError(err);
-            // FIX: On error, fall back to mock data so the app remains usable.
-            setTickets(INITIAL_TICKETS);
+            setTickets([]); // On error, do not fall back to mock data.
             setIsLoading(false); // Ensure loading stops on error
         }
     );

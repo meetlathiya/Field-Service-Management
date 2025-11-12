@@ -8,31 +8,39 @@ import "firebase/compat/storage";
 
 
 // Your web app's Firebase configuration
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: "AIzaSyAQmSlTWi78plOIu1nWh9hYGhckzfCEtY4",
   authDomain: "pefms-9312d.firebaseapp.com",
   projectId: "pefms-9312d",
-  storageBucket: "pefms-9312d.appspot.com",
+  storageBucket: "pefms-9312d.firebasestorage.app",
   messagingSenderId: "890854670435",
-  appId: "1:890854670435:web:dd7568df76226205067856",
-  measurementId: "G-W5SDR90PGM"
+  appId: "1:890854670435:web:c4dde24a102a3340067856",
+  measurementId: "G-3E3BWGL75G"
 };
 
+let app: firebase.app.App | null = null;
+export let initError: Error | null = null;
 
-// Initialize Firebase, preventing re-initialization on hot-reloads.
-if (!firebase.apps.length) {
-    firebase.initializeApp(firebaseConfig);
+try {
+  // Initialize Firebase, preventing re-initialization on hot-reloads.
+  if (!firebase.apps.length) {
+      app = firebase.initializeApp(firebaseConfig);
+  } else {
+      app = firebase.app();
+  }
+} catch (e: any) {
+    console.error("Firebase Initialization Error:", e);
+    // Add a user-friendly message for the most common issue.
+    if (e.message && (e.message.includes('API key') || e.code === 'auth/invalid-api-key')) {
+         initError = new Error("Firebase initialization failed: Invalid API Key. Please check your firebaseConfig.ts file.");
+    } else {
+        initError = e;
+    }
 }
 
-
-// Initialize Cloud Firestore and get a reference to the service
-export const db = firebase.firestore();
-
-// Initialize Firebase Authentication and get a reference to the service
-export const auth = firebase.auth();
-
-// Initialize Cloud Storage and get a reference to the service
-export const storage = firebase.storage();
-
+// Initialize services only if the app was initialized successfully.
+export const db = app ? firebase.firestore() : null;
+export const auth = app ? firebase.auth() : null;
+export const storage = app ? firebase.storage() : null;
 // FIX: Export the firebase namespace for types and other utilities (like Timestamp).
 export default firebase;

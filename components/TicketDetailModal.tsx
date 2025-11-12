@@ -10,6 +10,7 @@ interface TicketDetailModalProps {
   onClose: () => void;
   ticket: Ticket;
   onUpdate: (firestoreDocId: string, updates: TicketUpdatePayload) => void;
+  onUploadError: (error: Error) => void;
 }
 
 const statusColors: { [key in TicketStatus]: string } = {
@@ -43,62 +44,59 @@ const formatDateForInput = (date: Date | null | undefined): string => {
     return `${year}-${month}-${day}`;
 };
 
-const compressImage = (file: File): Promise<Blob> => {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = (event) => {
-            const img = new Image();
-            img.src = event.target?.result as string;
-            img.onload = () => {
-                const canvas = document.createElement('canvas');
-                // Performance: Lower max dimensions for faster processing and smaller uploads
-                const MAX_WIDTH = 1024;
-                const MAX_HEIGHT = 1024;
-                let width = img.width;
-                let height = img.height;
+const compressImage = async (file: File): Promise<Blob> => {
+    // Use createImageBitmap for better performance and memory management compared to FileReader
+    const bitmap = await createImageBitmap(file);
+    const { width: originalWidth, height: originalHeight } = bitmap;
+    
+    const canvas = document.createElement('canvas');
+    const MAX_WIDTH = 1024;
+    const MAX_HEIGHT = 1024;
+    let targetWidth = originalWidth;
+    let targetHeight = originalHeight;
 
-                if (width > height) {
-                    if (width > MAX_WIDTH) {
-                        height *= MAX_WIDTH / width;
-                        width = MAX_WIDTH;
-                    }
+    if (targetWidth > targetHeight) {
+        if (targetWidth > MAX_WIDTH) {
+            targetHeight = Math.round(targetHeight * (MAX_WIDTH / targetWidth));
+            targetWidth = MAX_WIDTH;
+        }
+    } else {
+        if (targetHeight > MAX_HEIGHT) {
+            targetWidth = Math.round(targetWidth * (MAX_HEIGHT / targetHeight));
+            targetHeight = MAX_HEIGHT;
+        }
+    }
+
+    canvas.width = targetWidth;
+    canvas.height = targetHeight;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+        throw new Error('Could not get canvas context');
+    }
+    ctx.drawImage(bitmap, 0, 0, targetWidth, targetHeight);
+    bitmap.close(); // Release memory associated with the bitmap
+
+    return new Promise((resolve, reject) => {
+        canvas.toBlob(
+            (blob) => {
+                if (blob) {
+                    resolve(blob);
                 } else {
-                    if (height > MAX_HEIGHT) {
-                        width *= MAX_HEIGHT / height;
-                        height = MAX_HEIGHT;
-                    }
+                    reject(new Error('Canvas to Blob conversion failed.'));
                 }
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                if (!ctx) {
-                    return reject(new Error('Could not get canvas context'));
-                }
-                ctx.drawImage(img, 0, 0, width, height);
-                // Performance: Use toBlob for more efficient, non-blocking conversion
-                canvas.toBlob(
-                    (blob) => {
-                        if (blob) {
-                            resolve(blob);
-                        } else {
-                            reject(new Error('Image compression failed.'));
-                        }
-                    },
-                    'image/jpeg',
-                    0.8
-                );
-            };
-            img.onerror = (error) => reject(error);
-        };
-        reader.onerror = (error) => reject(error);
+            },
+            'image/jpeg',
+            0.8 // Good quality/size balance
+        );
     });
 };
 
-export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, onClose, ticket, onUpdate }) => {
+export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, onClose, ticket, onUpdate, onUploadError }) => {
     const [isEditingNotes, setIsEditingNotes] = useState(false);
     const [notes, setNotes] = useState(ticket.notes);
     const [isUploading, setIsUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [uploadError, setUploadError] = useState<string | null>(null);
     
     const handleUpdate = useCallback(<K extends keyof TicketUpdatePayload>(field: K, value: TicketUpdatePayload[K]) => {
         onUpdate(ticket.firestoreDocId, { [field]: value });
@@ -119,23 +117,41 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, on
             }
 
             setIsUploading(true);
+            setUploadProgress(0);
+            setUploadError(null);
+
+            const individualProgresses: number[] = files.map(() => 0);
+            const updateTotalProgress = () => {
+                const total = individualProgresses.reduce((acc, p) => acc + p, 0);
+                const overallPercentage = total / files.length;
+                setUploadProgress(overallPercentage);
+            };
+
             try {
-                // Performance: Compress images client-side before uploading
                 const compressionPromises = files.map(compressImage);
                 const compressedImageBlobs = await Promise.all(compressionPromises);
                 
-                // Performance: Upload compressed blobs instead of full-size files or base64 strings
-                const uploadPromises = compressedImageBlobs.map(imgBlob =>
-                    firebaseService.uploadImage(imgBlob, 'ticket-photos')
+                const uploadPromises = compressedImageBlobs.map((imgBlob, index) =>
+                    firebaseService.uploadImage(
+                        imgBlob, 
+                        'ticket-photos',
+                        (progress) => {
+                            individualProgresses[index] = progress;
+                            updateTotalProgress();
+                        }
+                    )
                 );
                 
                 const newImageUrls = await Promise.all(uploadPromises);
                 handleUpdate('photos', [...ticket.photos, ...newImageUrls]);
             } catch (error) {
                 console.error("Error uploading photos:", error);
-                alert("An error occurred during photo upload. Please try again.");
+                onUploadError(error as Error);
+                const message = error instanceof Error ? error.message : "An unknown error occurred.";
+                setUploadError(`Photo upload failed. ${message}`);
             } finally {
                 setIsUploading(false);
+                setUploadProgress(0);
                 e.target.value = '';
             }
         }
@@ -143,10 +159,12 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, on
     
     const handleSaveSignature = async (signatureDataUrl: string) => {
         try {
+            // Note: signature uploads do not have progress reporting, but are generally small and fast.
             const signatureUrl = await firebaseService.uploadImage(signatureDataUrl, 'signatures');
             handleUpdate('customerSignature', signatureUrl);
         } catch (error) {
             console.error("Error uploading signature:", error);
+            onUploadError(error as Error);
             alert("Failed to save signature. Please try again.");
         }
     };
@@ -218,30 +236,39 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, on
                                 </div>
                                 <div>
                                     <label className="text-sm font-medium text-gray-500">Job Photos (up to 5)</label>
-                                    <div className="mt-2 flex flex-wrap gap-2">
-                                        {ticket.photos.map((photoUrl, index) => (
-                                            <img key={index} src={photoUrl} alt={`Job photo ${index+1}`} className="w-24 h-24 object-cover rounded-md" />
-                                        ))}
+                                    <div className="mt-2">
+                                        <div className="flex flex-wrap gap-2">
+                                            {ticket.photos.map((photoUrl, index) => (
+                                                <img key={index} src={photoUrl} alt={`Job photo ${index+1}`} className="w-24 h-24 object-cover rounded-md" />
+                                            ))}
+                                            {ticket.photos.length < 5 && !isUploading && (
+                                                <div className="flex gap-2">
+                                                    <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50 text-gray-500">
+                                                        <CameraIcon className="h-8 w-8" />
+                                                        <span className="text-xs mt-1">Take Photo</span>
+                                                        <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} className="hidden" disabled={isUploading}/>
+                                                    </label>
+                                                     <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50 text-gray-500">
+                                                        <PhotoIcon className="h-8 w-8" />
+                                                        <span className="text-xs mt-1">From Gallery</span>
+                                                        <input type="file" multiple accept="image/*" onChange={handlePhotoUpload} className="hidden" disabled={isUploading}/>
+                                                    </label>
+                                                </div>
+                                            )}
+                                        </div>
                                         {isUploading && (
-                                            <div className="w-24 h-24 flex items-center justify-center border-2 border-dashed border-gray-300 rounded-md">
-                                                <svg className="animate-spin h-6 w-6 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-                                            </div>
-                                        )}
-                                        {ticket.photos.length < 5 && !isUploading && (
-                                            <div className="flex gap-2">
-                                                <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50 text-gray-500">
-                                                    <CameraIcon className="h-8 w-8" />
-                                                    <span className="text-xs mt-1">Take Photo</span>
-                                                    <input type="file" accept="image/*" capture="environment" onChange={handlePhotoUpload} className="hidden" disabled={isUploading}/>
-                                                </label>
-                                                 <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50 text-gray-500">
-                                                    <PhotoIcon className="h-8 w-8" />
-                                                    <span className="text-xs mt-1">From Gallery</span>
-                                                    <input type="file" multiple accept="image/*" onChange={handlePhotoUpload} className="hidden" disabled={isUploading}/>
-                                                </label>
+                                            <div className="mt-2 max-w-xs">
+                                                <div className="flex justify-between mb-1">
+                                                    <span className="text-xs font-medium text-gray-700">Uploading photos...</span>
+                                                    <span className="text-xs font-medium text-gray-700">{Math.round(uploadProgress)}%</span>
+                                                </div>
+                                                <div className="w-full bg-gray-200 rounded-full h-2">
+                                                    <div className="bg-primary h-2 rounded-full transition-width duration-300" style={{ width: `${uploadProgress}%` }}></div>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
+                                    {uploadError && <p className="text-sm text-danger mt-2">{uploadError}</p>}
                                 </div>
                             </div>
                         </div>

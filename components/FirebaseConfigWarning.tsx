@@ -23,6 +23,20 @@ export const FirebaseConfigWarning: React.FC = () => {
           </ol>
         </div>
 
+        <div className="mt-6 text-left bg-blue-50 p-6 rounded-lg border border-blue-200">
+          <h2 className="text-xl font-semibold text-gray-700 mb-3">Still Seeing This Warning?</h2>
+          <p className="text-gray-600 mb-4">
+            If you've copied your config and are still stuck here, it means the Firebase Console is giving you a placeholder key. This usually happens if the project setup is incomplete.
+          </p>
+          <p className="font-semibold text-gray-700">Here's the most common fix:</p>
+          <ol className="list-decimal list-inside space-y-2 text-gray-600 mt-2">
+              <li>In your Firebase Console, go to the <span className="font-bold">Authentication</span> section (under "Build").</li>
+              <li>Click the <span className="font-bold">"Get started"</span> button if you see it.</li>
+              <li>Enable at least one sign-in provider (e.g., <span className="font-bold">Email/Password</span>).</li>
+              <li>Once Authentication is active, go back to <span className="font-bold">Project Settings {"->"} General</span> and copy your web app config again. The API key should now be real and unique.</li>
+          </ol>
+        </div>
+
         <div className="mt-6 text-left">
             <p className="text-gray-600 mb-2">Your config object should look like this (with your actual values):</p>
             <pre className="bg-gray-800 text-white p-4 rounded-lg text-sm overflow-x-auto">

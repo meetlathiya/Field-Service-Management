@@ -1,10 +1,11 @@
 // FIX: Update imports to use v8 firebase object from config.
 
-import firebase, { db, storage } from './firebaseConfig';
+import firebase, { db, storage, initError } from './firebaseConfig';
 import { Ticket, TicketUpdatePayload, TicketStatus } from '../types';
 
-// FIX: Use v8 syntax db.collection()
-const ticketsCollectionRef = db.collection('tickets');
+// Re-export the initialization error so other parts of the app can check it.
+export { initError };
+
 // FIX: Get Timestamp from the v8 firebase namespace.
 const Timestamp = firebase.firestore.Timestamp;
 
@@ -20,7 +21,14 @@ const fromFirestore = (ticketData: any): Ticket => {
 }
 
 export const firebaseService = {
-  uploadImage: async (imageData: Blob | string, folder: 'ticket-photos' | 'signatures'): Promise<string> => {
+  uploadImage: (
+    imageData: Blob | string,
+    folder: 'ticket-photos' | 'signatures',
+    onProgress?: (progress: number) => void
+  ): Promise<string> => {
+    if (!storage) {
+        return Promise.reject(initError || new Error("Firebase Storage is not initialized."));
+    }
     let extension = 'png';
     // Performance: Check if we are uploading a jpeg blob and set the extension.
     if (imageData instanceof Blob && imageData.type === 'image/jpeg') {
@@ -31,26 +39,52 @@ export const firebaseService = {
     const fileName = `${folder}/${new Date().getTime()}-${Math.random().toString(36).substring(2)}.${extension}`;
     const storageRef = storage.ref(fileName);
 
-    let uploadTask;
     // Upload the file.
     if (typeof imageData === 'string') {
-        // Handle base64 data strings (from signature pad)
-        uploadTask = await storageRef.putString(imageData, 'data_url');
+        // Handle base64 data strings (from signature pad). Progress reporting is not supported.
+        return storageRef.putString(imageData, 'data_url').then(snapshot => {
+            return snapshot.ref.getDownloadURL();
+        });
     } else {
-        // Handle Blob/File objects (from photo uploads), which is more efficient
-        uploadTask = await storageRef.put(imageData);
+        // Handle Blob/File objects (from photo uploads), which is more efficient and supports progress.
+        // FIX: Explicitly set the content type metadata to prevent uploads from stalling.
+        const metadata = { contentType: imageData.type };
+        return new Promise((resolve, reject) => {
+            const uploadTask = storageRef.put(imageData, metadata);
+
+            uploadTask.on(
+                firebase.storage.TaskEvent.STATE_CHANGED,
+                (snapshot) => {
+                    // BUG FIX: Add a guard against division by zero if totalBytes is not yet available
+                    // or the file is empty, preventing NaN progress values that would hang the UI.
+                    const progress = snapshot.totalBytes > 0
+                        ? (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+                        : 0;
+                    if (onProgress) {
+                        onProgress(progress);
+                    }
+                },
+                (error) => {
+                    reject(error);
+                },
+                () => {
+                    uploadTask.snapshot.ref.getDownloadURL().then(resolve).catch(reject);
+                }
+            );
+        });
     }
-    
-    // Get the download URL
-    const downloadURL = await uploadTask.ref.getDownloadURL();
-    return downloadURL;
   },
   
   streamTickets: (
     onSuccess: (tickets: Ticket[]) => void,
     onError: (error: Error) => void
   ): (() => void) => {
+    if (!db) {
+        onError(initError || new Error("Firestore is not initialized."));
+        return () => {}; // Return an empty unsubscribe function
+    }
     // FIX: Use v8 chained query syntax
+    const ticketsCollectionRef = db.collection('tickets');
     const q = ticketsCollectionRef.orderBy('createdAt', 'desc');
 
     // FIX: Use v8 onSnapshot on the query object
@@ -65,12 +99,16 @@ export const firebaseService = {
   },
 
   createTicket: async (newTicketData: Omit<Ticket, 'id' | 'createdAt' | 'updatedAt' | 'status'>): Promise<string> => {
+    if (!db) {
+        return Promise.reject(initError || new Error("Firestore is not initialized."));
+    }
     const now = new Date();
     const month = now.toLocaleString('default', { month: 'short' }).toUpperCase();
     const year = now.getFullYear().toString().slice(-2);
     const idPrefix = `PE-${month}${year}`;
     
     // FIX: Use v8 doc reference syntax for the counter.
+    const ticketsCollectionRef = db.collection('tickets');
     const counterRef = db.collection('counters').doc(idPrefix);
 
     try {
@@ -104,6 +142,10 @@ export const firebaseService = {
   },
 
   updateTicket: async (firestoreDocId: string, updates: TicketUpdatePayload): Promise<void> => {
+     if (!db) {
+        return Promise.reject(initError || new Error("Firestore is not initialized."));
+     }
+     const ticketsCollectionRef = db.collection('tickets');
      // FIX: Use v8 doc reference and update syntax.
      const ticketRef = ticketsCollectionRef.doc(firestoreDocId);
      await ticketRef.update({
