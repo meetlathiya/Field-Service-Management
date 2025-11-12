@@ -1,7 +1,3 @@
-// IMPORTANT: Replace with your project's Firebase configuration
-// You can get this from the Firebase Console:
-// Project Settings > General > Your apps > Web app > Firebase SDK snippet > Config
-
 // FIX: Updated Firebase imports to use the v8 compatibility layer (`/compat`)
 // which provides the default `firebase` export and aligns with the namespaced syntax
 // (e.g., `firebase.firestore()`) used throughout the app.
@@ -11,13 +7,15 @@ import "firebase/compat/auth";
 import "firebase/compat/storage";
 
 
+// Your web app's Firebase configuration
 const firebaseConfig = {
-  apiKey: process.env.FIREBASE_API_KEY || "YOUR_API_KEY",
-  authDomain: process.env.FIREBASE_AUTH_DOMAIN || "YOUR_PROJECT_ID.firebaseapp.com",
-  projectId: process.env.FIREBASE_PROJECT_ID || "YOUR_PROJECT_ID",
-  storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID || "YOUR_SENDER_ID",
-  appId: process.env.FIREBASE_APP_ID || "YOUR_APP_ID"
+  apiKey: "AIzaSyAQmSlTWi78plOIu1nWh9hYGhckzfCEtY4",
+  authDomain: "pefms-9312d.firebaseapp.com",
+  projectId: "pefms-9312d",
+  storageBucket: "pefms-9312d.firebasestorage.app",
+  messagingSenderId: "890854670435",
+  appId: "1:890854670435:web:dd7568df76226205067856",
+  measurementId: "G-W5SDR90PGM"
 };
 
 // Initialize Firebase, preventing re-initialization on hot-reloads.
