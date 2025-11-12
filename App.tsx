@@ -4,6 +4,8 @@ import { Dashboard } from './components/Dashboard';
 import { CalendarView } from './components/CalendarView';
 import { TicketFormModal } from './components/TicketFormModal';
 import { TicketDetailModal } from './components/TicketDetailModal';
+import { FirestoreRulesWarning } from './components/FirestoreRulesWarning';
+import { FirestoreDatabaseWarning } from './components/FirestoreDatabaseWarning';
 import { PlusIcon } from './components/Icons';
 import { AppView, Ticket, TicketUpdatePayload } from './types';
 import { useTickets } from './hooks/useTickets';
@@ -17,7 +19,15 @@ const mockUser = {
 
 const App: React.FC = () => {
   const [currentView, setCurrentView] = useState<AppView>(AppView.Dashboard);
-  const { tickets, addTicket, updateTicket, isLoading: areTicketsLoading } = useTickets();
+  const { 
+    tickets, 
+    addTicket, 
+    updateTicket, 
+    isLoading: areTicketsLoading, 
+    error: ticketsError,
+    operationError,
+    clearOperationError
+  } = useTickets();
 
   const [isNewTicketModalOpen, setIsNewTicketModalOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
@@ -106,6 +116,16 @@ const App: React.FC = () => {
         />
       )}
       
+      {ticketsError && (
+        <FirestoreRulesWarning error={ticketsError} />
+      )}
+      
+      {operationError && operationError.message.includes("The database (default) does not exist") && (
+        <FirestoreDatabaseWarning
+          error={operationError}
+          onClose={clearOperationError}
+        />
+      )}
     </div>
   );
 };

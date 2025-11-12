@@ -43,7 +43,7 @@ const formatDateForInput = (date: Date | null | undefined): string => {
     return `${year}-${month}-${day}`;
 };
 
-const compressImage = (file: File): Promise<string> => {
+const compressImage = (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.readAsDataURL(file);
@@ -52,8 +52,9 @@ const compressImage = (file: File): Promise<string> => {
             img.src = event.target?.result as string;
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                const MAX_WIDTH = 1280;
-                const MAX_HEIGHT = 1280;
+                // Performance: Lower max dimensions for faster processing and smaller uploads
+                const MAX_WIDTH = 1024;
+                const MAX_HEIGHT = 1024;
                 let width = img.width;
                 let height = img.height;
 
@@ -75,7 +76,18 @@ const compressImage = (file: File): Promise<string> => {
                     return reject(new Error('Could not get canvas context'));
                 }
                 ctx.drawImage(img, 0, 0, width, height);
-                resolve(canvas.toDataURL('image/jpeg', 0.8));
+                // Performance: Use toBlob for more efficient, non-blocking conversion
+                canvas.toBlob(
+                    (blob) => {
+                        if (blob) {
+                            resolve(blob);
+                        } else {
+                            reject(new Error('Image compression failed.'));
+                        }
+                    },
+                    'image/jpeg',
+                    0.8
+                );
             };
             img.onerror = (error) => reject(error);
         };
@@ -108,11 +120,13 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, on
 
             setIsUploading(true);
             try {
+                // Performance: Compress images client-side before uploading
                 const compressionPromises = files.map(compressImage);
-                const compressedImages = await Promise.all(compressionPromises);
-
-                const uploadPromises = compressedImages.map(imgDataUrl =>
-                    firebaseService.uploadImage(imgDataUrl, 'ticket-photos')
+                const compressedImageBlobs = await Promise.all(compressionPromises);
+                
+                // Performance: Upload compressed blobs instead of full-size files or base64 strings
+                const uploadPromises = compressedImageBlobs.map(imgBlob =>
+                    firebaseService.uploadImage(imgBlob, 'ticket-photos')
                 );
                 
                 const newImageUrls = await Promise.all(uploadPromises);

@@ -20,30 +20,45 @@ const fromFirestore = (ticketData: any): Ticket => {
 }
 
 export const firebaseService = {
-  uploadImage: async (base64Data: string, folder: 'ticket-photos' | 'signatures'): Promise<string> => {
+  uploadImage: async (imageData: Blob | string, folder: 'ticket-photos' | 'signatures'): Promise<string> => {
+    let extension = 'png';
+    // Performance: Check if we are uploading a jpeg blob and set the extension.
+    if (imageData instanceof Blob && imageData.type === 'image/jpeg') {
+        extension = 'jpg';
+    }
+
     // Create a unique filename
-    const fileName = `${folder}/${new Date().getTime()}-${Math.random().toString(36).substring(2)}.png`;
+    const fileName = `${folder}/${new Date().getTime()}-${Math.random().toString(36).substring(2)}.${extension}`;
     const storageRef = storage.ref(fileName);
 
-    // Upload the file. The Firebase SDK can directly handle base64 data strings.
-    const uploadTask = await storageRef.putString(base64Data, 'data_url');
+    let uploadTask;
+    // Upload the file.
+    if (typeof imageData === 'string') {
+        // Handle base64 data strings (from signature pad)
+        uploadTask = await storageRef.putString(imageData, 'data_url');
+    } else {
+        // Handle Blob/File objects (from photo uploads), which is more efficient
+        uploadTask = await storageRef.put(imageData);
+    }
     
     // Get the download URL
     const downloadURL = await uploadTask.ref.getDownloadURL();
     return downloadURL;
   },
   
-  streamTickets: (callback: (tickets: Ticket[]) => void): (() => void) => {
+  streamTickets: (
+    onSuccess: (tickets: Ticket[]) => void,
+    onError: (error: Error) => void
+  ): (() => void) => {
     // FIX: Use v8 chained query syntax
     const q = ticketsCollectionRef.orderBy('createdAt', 'desc');
 
     // FIX: Use v8 onSnapshot on the query object
     const unsubscribe = q.onSnapshot((querySnapshot) => {
       const tickets = querySnapshot.docs.map(doc => fromFirestore({ ...doc.data(), firestoreDocId: doc.id }));
-      callback(tickets);
+      onSuccess(tickets);
     }, (error) => {
-        console.error("Error streaming tickets: ", error);
-        // You could implement more robust error handling here, e.g., showing a toast notification.
+        onError(error);
     });
 
     return unsubscribe;
