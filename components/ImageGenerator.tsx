@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Ticket, TicketUpdatePayload } from '../types';
 import { geminiService } from '../services/geminiService';
+import { firebaseService } from '../services/firebaseService';
 import { PhotoIcon } from './Icons';
 
 interface ImageGeneratorProps {
@@ -14,6 +15,7 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ tickets, onUpdat
   const [error, setError] = useState<string | null>(null);
   const [generatedImage, setGeneratedImage] = useState<string | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState<string>('');
+  const [isAttaching, setIsAttaching] = useState(false);
   const [attachStatus, setAttachStatus] = useState<'idle' | 'success' | 'error'>('idle');
 
   const handleGenerateImage = async (e: React.FormEvent) => {
@@ -27,7 +29,8 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ tickets, onUpdat
 
     try {
       const base64Data = await geminiService.generateImage(prompt);
-      setGeneratedImage(`data:image/png;base64,${base64Data}`);
+      // FIX: The imagen model returns JPEG, not PNG.
+      setGeneratedImage(`data:image/jpeg;base64,${base64Data}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An unknown error occurred.');
     } finally {
@@ -35,19 +38,32 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ tickets, onUpdat
     }
   };
 
-  const handleAttachImage = () => {
-    if (!generatedImage || !selectedTicketId) return;
-    
-    const ticketToUpdate = tickets.find(t => t.firestoreDocId === selectedTicketId);
-    if (!ticketToUpdate) {
-        setAttachStatus('error');
-        return;
-    }
+  const handleAttachImage = async () => {
+    if (!generatedImage || !selectedTicketId || isAttaching) return;
 
-    const updatedPhotos = [...ticketToUpdate.photos, generatedImage];
-    onUpdateTicket(selectedTicketId, { photos: updatedPhotos });
-    setAttachStatus('success');
-    setTimeout(() => setAttachStatus('idle'), 3000); // Reset status after 3s
+    setIsAttaching(true);
+    setAttachStatus('idle');
+
+    try {
+        const imageUrl = await firebaseService.uploadImage(generatedImage, 'ticket-photos');
+        const ticketToUpdate = tickets.find(t => t.firestoreDocId === selectedTicketId);
+        
+        if (!ticketToUpdate) {
+            setAttachStatus('error');
+            setIsAttaching(false);
+            return;
+        }
+
+        const updatedPhotos = [...ticketToUpdate.photos, imageUrl];
+        onUpdateTicket(selectedTicketId, { photos: updatedPhotos });
+        setAttachStatus('success');
+        setTimeout(() => setAttachStatus('idle'), 3000); // Reset status after 3s
+    } catch (err) {
+        console.error("Error attaching image:", err);
+        setAttachStatus('error');
+    } finally {
+        setIsAttaching(false);
+    }
   };
 
   const openTickets = tickets.filter(t => t.status !== 'Closed' && t.status !== 'Completed');
@@ -126,10 +142,10 @@ export const ImageGenerator: React.FC<ImageGeneratorProps> = ({ tickets, onUpdat
                             </select>
                             <button
                                 onClick={handleAttachImage}
-                                disabled={!selectedTicketId || attachStatus === 'success'}
+                                disabled={!selectedTicketId || isAttaching || attachStatus === 'success'}
                                 className="px-6 py-2 bg-accent text-white rounded-md hover:bg-green-600 disabled:bg-gray-400 transition-colors font-semibold"
                             >
-                                {attachStatus === 'success' ? 'Attached!' : 'Attach Image'}
+                                {isAttaching ? 'Attaching...' : (attachStatus === 'success' ? 'Attached!' : 'Attach Image')}
                             </button>
                         </div>
                          {attachStatus === 'error' && <p className="text-sm text-danger mt-2">Could not attach image. Please try again.</p>}

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Ticket, ServiceType, UrgencyLevel } from '../types';
 import { PRODUCT_CATEGORIES } from '../constants';
 import { CloseIcon } from './Icons';
+import { firebaseService } from '../services/firebaseService';
 
 interface TicketFormModalProps {
   isOpen: boolean;
@@ -29,8 +30,19 @@ const initialFormState = {
   scheduledDate: '',
 };
 
+const UploadingIndicator: React.FC = () => (
+    <div className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md text-gray-500">
+        <svg className="animate-spin h-8 w-8 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span className="text-xs mt-2">Uploading...</span>
+    </div>
+);
+
 export const TicketFormModal: React.FC<TicketFormModalProps> = ({ isOpen, onClose, onSave }) => {
   const [formData, setFormData] = useState<any>(initialFormState);
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
@@ -42,23 +54,46 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({ isOpen, onClos
     }
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
         const files = Array.from(e.target.files);
         if (formData.photos.length + files.length > 5) {
             alert("You can upload a maximum of 5 photos.");
             return;
         }
-        // FIX: Explicitly type 'file' as 'File' to resolve type inference issue.
-        files.forEach((file: File) => {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                if (event.target && typeof event.target.result === 'string') {
-                    setFormData(prev => ({...prev, photos: [...prev.photos, event.target.result as string]}));
-                }
-            };
-            reader.readAsDataURL(file);
+
+        setIsUploading(true);
+        const uploadPromises = files.map(file => {
+            return new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = async (event) => {
+                    if (event.target && typeof event.target.result === 'string') {
+                        try {
+                            const imageUrl = await firebaseService.uploadImage(event.target.result, 'ticket-photos');
+                            resolve(imageUrl);
+                        } catch (error) {
+                            reject(error);
+                        }
+                    } else {
+                        reject(new Error("Failed to read file"));
+                    }
+                };
+                reader.onerror = error => reject(error);
+                reader.readAsDataURL(file);
+            });
         });
+
+        try {
+            const newImageUrls = await Promise.all(uploadPromises);
+            setFormData(prev => ({...prev, photos: [...prev.photos, ...newImageUrls]}));
+        } catch (error) {
+            console.error("Error uploading images:", error);
+            alert("An error occurred while uploading photos. Please try again.");
+        } finally {
+            setIsUploading(false);
+            // Reset file input to allow re-uploading the same file if needed
+            e.target.value = '';
+        }
     }
   };
 
@@ -160,9 +195,9 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({ isOpen, onClos
               <div>
                 <label className="block text-sm font-medium text-gray-700">Add Photos (Optional, up to 5)</label>
                 <div className="mt-2 flex items-center flex-wrap gap-4">
-                   {formData.photos.map((photo, index) => (
+                   {formData.photos.map((photoUrl, index) => (
                       <div key={index} className="relative">
-                        <img src={photo} alt={`Upload preview ${index + 1}`} className="h-24 w-24 rounded-md object-cover" />
+                        <img src={photoUrl} alt={`Upload preview ${index + 1}`} className="h-24 w-24 rounded-md object-cover" />
                         <button
                           type="button"
                           onClick={() => handleRemovePhoto(index)}
@@ -173,11 +208,12 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({ isOpen, onClos
                         </button>
                       </div>
                    ))}
-                   {formData.photos.length < 5 && (
+                   {isUploading && <UploadingIndicator />}
+                   {formData.photos.length < 5 && !isUploading && (
                       <label className="w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50 text-gray-500">
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M12 4v16m8-8H4" /></svg>
                         <span className="text-xs mt-1">Add Image</span>
-                        <input type="file" multiple accept="image/*" capture="environment" onChange={handlePhotoUpload} className="hidden" />
+                        <input type="file" multiple accept="image/*" capture="environment" onChange={handlePhotoUpload} className="hidden" disabled={isUploading} />
                       </label>
                    )}
                 </div>
@@ -206,7 +242,9 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({ isOpen, onClos
         </form>
         <div className="flex justify-end items-center p-4 border-t bg-gray-50 rounded-b-lg">
           <button type="button" onClick={onClose} className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors">Cancel</button>
-          <button type="submit" form="ticket-form" className="ml-4 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-light transition-colors">Save Ticket</button>
+          <button type="submit" form="ticket-form" className="ml-4 px-4 py-2 bg-primary text-white rounded-md hover:bg-primary-light transition-colors" disabled={isUploading}>
+            {isUploading ? 'Uploading...' : 'Save Ticket'}
+          </button>
         </div>
       </div>
     </div>

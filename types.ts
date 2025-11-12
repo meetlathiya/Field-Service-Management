@@ -43,13 +43,13 @@ export interface Ticket {
   createdAt: Date;
   updatedAt: Date;
   scheduledDate?: Date | null;
-  photos: string[]; // array of base64 image strings
+  photos: string[]; // Array of public URLs pointing to images in Firebase Storage
   notes: string;
   serviceCharge: number;
   partsCharge: number;
   commission: number;
   feedbackRating?: number;
-  customerSignature?: string; // base64 image string
+  customerSignature?: string; // A public URL pointing to the signature image in Firebase Storage
 }
 
 export type TicketUpdatePayload = Partial<Omit<Ticket, 'id' | 'createdAt' | 'firestoreDocId'>>;

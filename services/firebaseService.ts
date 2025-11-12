@@ -1,5 +1,5 @@
 // FIX: Update imports to use v8 firebase object from config.
-import firebase, { db } from './firebaseConfig';
+import firebase, { db, storage } from './firebaseConfig';
 import { Ticket, TicketUpdatePayload, TicketStatus } from '../types';
 
 // FIX: Use v8 syntax db.collection()
@@ -19,6 +19,19 @@ const fromFirestore = (ticketData: any): Ticket => {
 }
 
 export const firebaseService = {
+  uploadImage: async (base64Data: string, folder: 'ticket-photos' | 'signatures'): Promise<string> => {
+    // Create a unique filename
+    const fileName = `${folder}/${new Date().getTime()}-${Math.random().toString(36).substring(2)}.png`;
+    const storageRef = storage.ref(fileName);
+
+    // Upload the file. The Firebase SDK can directly handle base64 data strings.
+    const uploadTask = await storageRef.putString(base64Data, 'data_url');
+    
+    // Get the download URL
+    const downloadURL = await uploadTask.ref.getDownloadURL();
+    return downloadURL;
+  },
+  
   streamTickets: (callback: (tickets: Ticket[]) => void): (() => void) => {
     // FIX: Use v8 chained query syntax
     const q = ticketsCollectionRef.orderBy('createdAt', 'desc');

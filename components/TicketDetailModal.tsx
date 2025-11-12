@@ -3,6 +3,7 @@ import { Ticket, TicketStatus, Technician, TicketUpdatePayload, UrgencyLevel, Se
 import { TECHNICIANS } from '../constants';
 import { CloseIcon, PencilIcon, StarIcon } from './Icons';
 import { SignaturePad } from './SignaturePad';
+import { firebaseService } from '../services/firebaseService';
 
 interface TicketDetailModalProps {
   isOpen: boolean;
@@ -45,6 +46,7 @@ const formatDateForInput = (date: Date | null | undefined): string => {
 export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, onClose, ticket, onUpdate }) => {
     const [isEditingNotes, setIsEditingNotes] = useState(false);
     const [notes, setNotes] = useState(ticket.notes);
+    const [isUploading, setIsUploading] = useState(false);
     
     const handleUpdate = useCallback(<K extends keyof TicketUpdatePayload>(field: K, value: TicketUpdatePayload[K]) => {
         onUpdate(ticket.firestoreDocId, { [field]: value });
@@ -56,34 +58,50 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, on
         handleUpdate('scheduledDate', newDate);
     };
 
-    const technicianName = useMemo(() => {
-      return TECHNICIANS.find(t => t.id === ticket.technicianId)?.name || 'Unassigned';
-    }, [ticket.technicianId]);
-
-    const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files) {
             const files = Array.from(e.target.files);
             if (ticket.photos.length + files.length > 5) {
                 alert("You can upload a maximum of 5 photos per ticket.");
                 return;
             }
-            const newPhotos: string[] = [];
-            let filesProcessed = 0;
 
-            // FIX: Explicitly type 'file' as 'File' to resolve type inference issue.
-            files.forEach((file: File) => {
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    if (event.target && typeof event.target.result === 'string') {
-                        newPhotos.push(event.target.result);
-                    }
-                    filesProcessed++;
-                    if (filesProcessed === files.length) {
-                        handleUpdate('photos', [...ticket.photos, ...newPhotos]);
-                    }
-                };
-                reader.readAsDataURL(file);
-            });
+            setIsUploading(true);
+            try {
+                 const uploadPromises = files.map(file => {
+                    return new Promise<string>((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = async (event) => {
+                            if (event.target && typeof event.target.result === 'string') {
+                                try {
+                                    const imageUrl = await firebaseService.uploadImage(event.target.result, 'ticket-photos');
+                                    resolve(imageUrl);
+                                } catch (error) { reject(error); }
+                            } else { reject(new Error("Failed to read file")); }
+                        };
+                        reader.onerror = error => reject(error);
+                        reader.readAsDataURL(file);
+                    });
+                });
+                const newImageUrls = await Promise.all(uploadPromises);
+                handleUpdate('photos', [...ticket.photos, ...newImageUrls]);
+            } catch (error) {
+                console.error("Error uploading photos:", error);
+                alert("An error occurred during photo upload. Please try again.");
+            } finally {
+                setIsUploading(false);
+                e.target.value = '';
+            }
+        }
+    };
+    
+    const handleSaveSignature = async (signatureDataUrl: string) => {
+        try {
+            const signatureUrl = await firebaseService.uploadImage(signatureDataUrl, 'signatures');
+            handleUpdate('customerSignature', signatureUrl);
+        } catch (error) {
+            console.error("Error uploading signature:", error);
+            alert("Failed to save signature. Please try again.");
         }
     };
     
@@ -155,13 +173,18 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, on
                                 <div>
                                     <label className="text-sm font-medium text-gray-500">Job Photos (up to 5)</label>
                                     <div className="mt-2 flex flex-wrap gap-2">
-                                        {ticket.photos.map((photo, index) => (
-                                            <img key={index} src={photo} alt={`Job photo ${index+1}`} className="w-24 h-24 object-cover rounded-md" />
+                                        {ticket.photos.map((photoUrl, index) => (
+                                            <img key={index} src={photoUrl} alt={`Job photo ${index+1}`} className="w-24 h-24 object-cover rounded-md" />
                                         ))}
-                                        {ticket.photos.length < 5 && (
+                                        {isUploading && (
+                                            <div className="w-24 h-24 flex items-center justify-center border-2 border-dashed border-gray-300 rounded-md">
+                                                <svg className="animate-spin h-6 w-6 text-primary" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                                            </div>
+                                        )}
+                                        {ticket.photos.length < 5 && !isUploading && (
                                             <label className="w-24 h-24 flex items-center justify-center border-2 border-dashed border-gray-300 rounded-md cursor-pointer hover:bg-gray-50">
                                                 <span className="text-gray-500 text-3xl">+</span>
-                                                <input type="file" multiple accept="image/*" capture="environment" onChange={handlePhotoUpload} className="hidden" />
+                                                <input type="file" multiple accept="image/*" capture="environment" onChange={handlePhotoUpload} className="hidden" disabled={isUploading}/>
                                             </label>
                                         )}
                                     </div>
@@ -210,7 +233,7 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, on
                                         <img src={ticket.customerSignature} alt="Customer Signature" className="border rounded-md bg-white" />
                                     ) : (
                                         <SignaturePad 
-                                            onSave={(sig) => handleUpdate('customerSignature', sig)}
+                                            onSave={handleSaveSignature}
                                             onClear={() => handleUpdate('customerSignature', undefined)}
                                         />
                                     )}
