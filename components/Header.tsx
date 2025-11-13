@@ -1,17 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { AppView } from '../types';
+import { AppView, UserProfile } from '../types';
 import { DashboardIcon, CalendarIcon, MenuIcon, CloseIcon } from './Icons';
+import { User } from 'firebase/auth';
+import { ConnectionStatus } from './ConnectionStatus';
 
 interface HeaderProps {
   currentView: AppView;
   onNavigate: (view: AppView) => void;
-  user: { displayName: string | null; email: string | null; photoURL: string | null; };
+  user: User;
+  userProfile: UserProfile;
   onSignOut: () => void;
+  isConnected: boolean;
 }
 
-const UserAvatar: React.FC<{ user: HeaderProps['user'] }> = ({ user }) => {
+const UserAvatar: React.FC<{ user: HeaderProps['userProfile'] }> = ({ user }) => {
     const getInitials = () => {
-        if (user.displayName) return user.displayName.charAt(0).toUpperCase();
+        if (user.displayName) return user.displayName.split(' ').map(n => n[0]).join('').toUpperCase();
         if (user.email) return user.email.charAt(0).toUpperCase();
         return '?';
     };
@@ -30,7 +34,7 @@ const UserAvatar: React.FC<{ user: HeaderProps['user'] }> = ({ user }) => {
 };
 
 
-export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, user, onSignOut }) => {
+export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, user, userProfile, onSignOut, isConnected }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -66,6 +70,7 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, user, o
               <svg className="w-8 h-8 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M12 6V3m0 18v-3M5.636 5.636l-1.414-1.414M19.778 19.778l-1.414-1.414M18.364 5.636l1.414-1.414M4.222 19.778l1.414-1.414M12 12a6 6 0 100-12 6 6 0 000 12z"></path></svg>
               Payal Electronics
             </div>
+            <ConnectionStatus isConnected={isConnected} />
             <div className="hidden md:block">
               <div className="ml-10 flex items-baseline space-x-4">
                 {navItems.map((item) => (
@@ -91,14 +96,14 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, user, o
                     <div>
                         <button onClick={() => setIsUserMenuOpen(!isUserMenuOpen)} className="max-w-xs bg-primary-dark rounded-full flex items-center text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-primary-dark focus:ring-white">
                             <span className="sr-only">Open user menu</span>
-                            <UserAvatar user={user} />
+                            <UserAvatar user={userProfile} />
                         </button>
                     </div>
                     {isUserMenuOpen && (
-                         <div className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 z-30">
+                         <div className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 z-30">
                             <div className="px-4 py-2 border-b">
-                                <p className="text-sm text-gray-700 font-semibold truncate">{user.displayName || 'User'}</p>
-                                <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                                <p className="text-sm text-gray-700 font-semibold truncate">{userProfile.displayName || 'User'}</p>
+                                <p className="text-xs text-gray-500 truncate">{userProfile.email}</p>
                             </div>
                             <button onClick={onSignOut} className="w-full text-left block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">
                                 Sign out
@@ -141,16 +146,16 @@ export const Header: React.FC<HeaderProps> = ({ currentView, onNavigate, user, o
                  <div className="pt-4 pb-3 border-t border-primary-light">
                     <div className="flex items-center px-5">
                         <div className="flex-shrink-0">
-                           <UserAvatar user={user} />
+                           <UserAvatar user={userProfile} />
                         </div>
                         <div className="ml-3">
-                            <div className="text-base font-medium leading-none text-white">{user.displayName}</div>
-                            <div className="text-sm font-medium leading-none text-gray-400">{user.email}</div>
+                            <div className="text-base font-medium leading-none text-white">{userProfile.displayName}</div>
+                            <div className="text-sm font-medium leading-none text-gray-400">{userProfile.email}</div>
                         </div>
                     </div>
                     <div className="mt-3 px-2 space-y-1">
                         <button onClick={onSignOut} className="w-full text-left block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-primary-light">
-                            Sign out
+                             Sign out
                         </button>
                     </div>
                 </div>

@@ -21,7 +21,10 @@ export const StorageRulesWarning: React.FC<StorageRulesWarningProps> = ({ error,
             </div>
             <h1 className="mt-4 text-3xl font-bold text-gray-800">Action Required: Update Storage Rules</h1>
             <p className="mt-4 text-md text-gray-600">
-              The photo upload failed. This is almost always caused by Firebase Storage security rules that block uploads without user authentication.
+              The photo upload failed. This is not because your Storage bucket is missing, but because its <strong>Security Rules</strong> are blocking the app.
+            </p>
+             <p className="mt-2 text-sm text-gray-500">
+              Think of it like this: your bucket is a secure vault that is locked by default. You need to update its rules to give the app access during development.
             </p>
         </div>
 
@@ -48,7 +51,7 @@ export const StorageRulesWarning: React.FC<StorageRulesWarningProps> = ({ error,
 service firebase.storage {
   match /b/{bucket}/o {
     // WARNING: Allows anyone to read or write to your storage bucket.
-    // Not secure for production environments.
+    // This is for development only and is not secure for production.
     match /{allPaths=**} {
       allow read, write;
     }

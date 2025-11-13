@@ -9,7 +9,7 @@ const GoogleIcon = () => (
 
 export const Login: React.FC = () => {
   const [isSignUp, setIsSignUp] = useState(false);
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -20,32 +20,58 @@ export const Login: React.FC = () => {
     setError(null);
     setIsLoading(true);
 
+    let emailToAuth = username;
+    let passwordToAuth = password;
+    let isDemoLogin = false;
+
+    // Handle special demo credentials
+    if (username === 'admin' && password === 'admin') {
+      emailToAuth = 'admin@demo.com';
+      passwordToAuth = 'password123'; // Use a secure password for the actual account
+      isDemoLogin = true;
+    } else if (username === 'Tec' && password === 'Tec') {
+      emailToAuth = 'tec@demo.com';
+      passwordToAuth = 'password123'; // Use a secure password for the actual account
+      isDemoLogin = true;
+    }
+
+
     try {
       if (isSignUp) {
-        await authService.createUserWithEmailAndPassword(email, password);
+        if (username === 'admin' || username === 'Tec') {
+            setError('This username is reserved. Please choose another email.');
+            setIsLoading(false);
+            return;
+        }
+        await authService.createUserWithEmailAndPassword(emailToAuth, passwordToAuth);
       } else {
-        await authService.signInWithEmailAndPassword(email, password);
+        await authService.signInWithEmailAndPassword(emailToAuth, passwordToAuth);
       }
       // On success, the onAuthStateChanged listener in useAuth will handle the redirect.
     } catch (err: any) {
-      // Provide user-friendly error messages
-      switch (err.code) {
-        case 'auth/invalid-email':
-          setError('Please enter a valid email address.');
-          break;
-        case 'auth/user-not-found':
-        case 'auth/wrong-password':
-          setError('Invalid credentials. Please check your email and password.');
-          break;
-        case 'auth/email-already-in-use':
-          setError('An account with this email already exists. Please sign in.');
-          break;
-        case 'auth/weak-password':
-          setError('Password should be at least 6 characters long.');
-          break;
-        default:
-          setError('An unexpected error occurred. Please try again.');
-          break;
+      if (isDemoLogin && (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential')) {
+          setError(`To use this demo login, first create a user in Firebase Authentication with Email: ${emailToAuth} and Password: ${passwordToAuth}`);
+      } else {
+        // Provide user-friendly error messages
+        switch (err.code) {
+          case 'auth/invalid-email':
+            setError('Please enter a valid email address.');
+            break;
+          case 'auth/user-not-found':
+          case 'auth/wrong-password':
+          case 'auth/invalid-credential':
+            setError('Invalid credentials. Please check your username/email and password.');
+            break;
+          case 'auth/email-already-in-use':
+            setError('An account with this email already exists. Please sign in.');
+            break;
+          case 'auth/weak-password':
+            setError('Password should be at least 6 characters long.');
+            break;
+          default:
+            setError('An unexpected error occurred. Please try again.');
+            break;
+        }
       }
     } finally {
       setIsLoading(false);
@@ -67,7 +93,7 @@ export const Login: React.FC = () => {
   const toggleFormMode = () => {
     setIsSignUp(!isSignUp);
     setError(null);
-    setEmail('');
+    setUsername('');
     setPassword('');
   };
 
@@ -82,17 +108,17 @@ export const Login: React.FC = () => {
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           <div>
-            <label htmlFor="email" className="sr-only">Email address</label>
+            <label htmlFor="username" className="sr-only">Username or Email</label>
             <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
+              id="username"
+              name="username"
+              type="text"
+              autoComplete="username"
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-primary focus:border-primary sm:text-sm"
-              placeholder="Email address"
+              placeholder="Username or Email"
             />
           </div>
           <div>

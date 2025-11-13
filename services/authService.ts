@@ -1,56 +1,60 @@
-// FIX: Update to Firebase v8 syntax.
-import firebase, { auth, initError } from './firebaseConfig';
+import {
+    signInWithEmailAndPassword as fbSignInWithEmailAndPassword,
+    createUserWithEmailAndPassword as fbCreateUserWithEmailAndPassword,
+    updateProfile,
+    signInWithPopup,
+    GoogleAuthProvider,
+    signOut as fbSignOut,
+    onAuthStateChanged,
+    User,
+    UserCredential
+} from 'firebase/auth';
+import { auth, initError } from './firebaseConfig';
 
 
 export const authService = {
-    signInWithEmailAndPassword: async (email, password): Promise<firebase.auth.UserCredential> => {
+    signInWithEmailAndPassword: (email: string, password: string): Promise<UserCredential> => {
         if (!auth) {
             return Promise.reject(initError || new Error("Firebase Auth is not initialized."));
         }
-        return auth.signInWithEmailAndPassword(email, password);
+        return fbSignInWithEmailAndPassword(auth, email, password);
     },
     
-    createUserWithEmailAndPassword: async (email, password): Promise<firebase.auth.UserCredential> => {
+    createUserWithEmailAndPassword: async (email: string, password: string): Promise<UserCredential> => {
         if (!auth) {
             return Promise.reject(initError || new Error("Firebase Auth is not initialized."));
         }
-        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-        // Set a default display name based on the email
+        const userCredential = await fbCreateUserWithEmailAndPassword(auth, email, password);
+        const displayName = email.split('@')[0];
         if (userCredential.user) {
-            const displayName = email.split('@')[0];
-            await userCredential.user.updateProfile({ displayName });
+          await updateProfile(userCredential.user, { displayName });
         }
         return userCredential;
     },
 
-    signInWithGoogle: async (): Promise<firebase.auth.UserCredential> => {
+    signInWithGoogle: (): Promise<UserCredential> => {
         if (!auth) {
             return Promise.reject(initError || new Error("Firebase Auth is not initialized."));
         }
-        const provider = new firebase.auth.GoogleAuthProvider();
-        return auth.signInWithPopup(provider);
+        const provider = new GoogleAuthProvider();
+        return signInWithPopup(auth, provider);
     },
 
-    signOutUser: async (): Promise<void> => {
+    signOutUser: (): Promise<void> => {
         if (!auth) {
             console.error("Firebase Auth is not initialized. Cannot sign out.");
-            return;
+            return Promise.resolve();
         }
-        try {
-            // FIX: Use v8 signOut method.
-            await auth.signOut();
-        } catch (error) {
+        return fbSignOut(auth).catch(error => {
             console.error("Error signing out:", error);
-        }
+        });
     },
 
-    onAuthStateChangedListener: (callback: (user: firebase.User | null) => void) => {
+    onAuthStateChangedListener: (callback: (user: User | null) => void) => {
         if (!auth) {
             console.error("Firebase Auth is not initialized. Cannot listen for auth state changes.");
-            // Return a no-op unsubscribe function
             return () => {};
         }
-        // FIX: Use v8 onAuthStateChanged method.
-        return auth.onAuthStateChanged(callback);
+        return onAuthStateChanged(auth, callback);
     },
 };

@@ -1,12 +1,14 @@
 import React, { useState, useMemo } from 'react';
-import { Ticket, TicketStatus, Technician } from '../types';
+import { Ticket, TicketStatus, Technician, UserProfile } from '../types';
 import { TicketList } from './TicketList';
+import { TicketStatusChart } from './TicketStatusChart';
 import { TECHNICIANS } from '../constants';
 import { ExportIcon } from './Icons';
 
 interface DashboardProps {
   tickets: Ticket[];
   onTicketSelect: (ticket: Ticket) => void;
+  userProfile: UserProfile;
 }
 
 const KpiCard: React.FC<{ title: string; value: number; color: string }> = ({ title, value, color }) => (
@@ -16,21 +18,30 @@ const KpiCard: React.FC<{ title: string; value: number; color: string }> = ({ ti
   </div>
 );
 
-export const Dashboard: React.FC<DashboardProps> = ({ tickets, onTicketSelect }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ tickets, onTicketSelect, userProfile }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [techFilter, setTechFilter] = useState<string>('all');
 
+  const isTechnician = userProfile.role === 'technician';
+
+  const technicianTickets = useMemo(() => {
+    if (!isTechnician) return tickets;
+    return tickets.filter(t => t.technicianId === userProfile.technicianId);
+  }, [tickets, isTechnician, userProfile.technicianId]);
+
+
   const kpis = useMemo(() => {
-    const total = tickets.length;
-    const open = tickets.filter(t => ![TicketStatus.Completed, TicketStatus.Closed].includes(t.status)).length;
-    const completedToday = tickets.filter(t => t.status === TicketStatus.Completed && new Date(t.updatedAt).toDateString() === new Date().toDateString()).length;
-    const highUrgency = tickets.filter(t => t.urgency === 'High' && t.status !== TicketStatus.Closed).length;
+    const data = isTechnician ? technicianTickets : tickets;
+    const total = data.length;
+    const open = data.filter(t => ![TicketStatus.Completed, TicketStatus.Closed].includes(t.status)).length;
+    const completedToday = data.filter(t => t.status === TicketStatus.Completed && new Date(t.updatedAt).toDateString() === new Date().toDateString()).length;
+    const highUrgency = data.filter(t => t.urgency === 'High' && t.status !== TicketStatus.Closed).length;
     return { total, open, completedToday, highUrgency };
-  }, [tickets]);
+  }, [tickets, technicianTickets, isTechnician]);
 
   const filteredTickets = useMemo(() => {
-    return tickets.filter(ticket => {
+    return technicianTickets.filter(ticket => {
       const matchesSearch =
         ticket.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
         ticket.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -38,11 +49,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ tickets, onTicketSelect })
         ticket.serialNumber.toLowerCase().includes(searchTerm.toLowerCase());
       
       const matchesStatus = statusFilter === 'all' || ticket.status === statusFilter;
-      const matchesTech = techFilter === 'all' || ticket.technicianId === parseInt(techFilter);
+      const matchesTech = isTechnician || techFilter === 'all' || ticket.technicianId === parseInt(techFilter);
 
       return matchesSearch && matchesStatus && matchesTech;
     });
-  }, [tickets, searchTerm, statusFilter, techFilter]);
+  }, [technicianTickets, searchTerm, statusFilter, techFilter, isTechnician]);
 
   const handleExportCSV = () => {
     if (filteredTickets.length === 0) {
@@ -122,14 +133,20 @@ export const Dashboard: React.FC<DashboardProps> = ({ tickets, onTicketSelect })
   return (
     <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
       <div className="container mx-auto">
-        <h1 className="text-3xl font-bold text-gray-800 mb-6">Dashboard</h1>
+        <h1 className="text-3xl font-bold text-gray-800 mb-6">{isTechnician ? "My Assigned Tickets" : "Dashboard"}</h1>
         
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
-          <KpiCard title="Total Tickets" value={kpis.total} color="text-primary-dark" />
-          <KpiCard title="Open Tickets" value={kpis.open} color="text-yellow-500" />
+          <KpiCard title={isTechnician ? "Total My Tickets" : "Total Tickets"} value={kpis.total} color="text-primary-dark" />
+          <KpiCard title={isTechnician ? "My Open Tickets" : "Open Tickets"} value={kpis.open} color="text-yellow-500" />
           <KpiCard title="High Urgency" value={kpis.highUrgency} color="text-danger" />
           <KpiCard title="Completed Today" value={kpis.completedToday} color="text-accent" />
         </div>
+
+        {!isTechnician && (
+            <div className="mb-6">
+                <TicketStatusChart tickets={tickets} />
+            </div>
+        )}
 
         <div className="bg-white p-4 rounded-lg shadow mb-6">
           <h2 className="text-xl font-semibold text-gray-700 mb-4">All Tickets</h2>
@@ -153,6 +170,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ tickets, onTicketSelect })
                 {Object.values(TicketStatus).map(status => <option key={status} value={status}>{status}</option>)}
               </select>
             </div>
+            {!isTechnician && (
              <div className="w-full sm:w-auto">
               <select
                 value={techFilter}
@@ -162,7 +180,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ tickets, onTicketSelect })
                 <option value="all">All Technicians</option>
                 {TECHNICIANS.map(tech => <option key={tech.id} value={tech.id}>{tech.name}</option>)}
               </select>
-            </div>
+             </div>
+            )}
             <div className="w-full sm:w-auto">
               <button
                 onClick={handleExportCSV}

@@ -1,7 +1,10 @@
 import React from 'react';
 import { WarningIcon } from './Icons';
+import { firebaseConfig } from '../services/firebaseConfig';
 
 export const FirebaseConfigWarning: React.FC = () => {
+  const isKnownPlaceholder = firebaseConfig.apiKey === "AIzaSyAQmSlTWi78plOIu1nWh9hYGhckzfCEtY4";
+
   return (
     <div className="flex items-center justify-center min-h-screen bg-gray-100 p-4">
       <div className="w-full max-w-2xl p-8 bg-white rounded-lg shadow-2xl text-center">
@@ -11,6 +14,15 @@ export const FirebaseConfigWarning: React.FC = () => {
           The application cannot connect to the backend because your Firebase project credentials are not set up.
           Authentication and data services will fail until you complete the following steps.
         </p>
+
+        {isKnownPlaceholder && (
+          <div className="mt-6 text-left bg-red-50 p-4 rounded-lg border border-red-200">
+            <h2 className="text-lg font-semibold text-red-700 mb-2">Important Note</h2>
+            <p className="text-red-700 text-sm">
+              The API key currently in your configuration file is a default placeholder provided by this template. You must replace it with a <strong>real API key from your own Firebase project</strong>. Please follow the steps below carefully to generate and use your project's unique key.
+            </p>
+          </div>
+        )}
 
         <div className="mt-6 text-left bg-gray-50 p-6 rounded-lg border">
           <h2 className="text-xl font-semibold text-gray-700 mb-3">How to Fix This:</h2>

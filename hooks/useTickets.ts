@@ -1,44 +1,42 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Ticket, TicketUpdatePayload } from '../types';
-import { firebaseService, initError as firebaseInitError } from '../services/firebaseService';
+import { firebaseService, initError } from '../services/firebaseService';
+
 
 export const useTickets = () => {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<Error | null>(null);
-  const [operationError, setOperationError] = useState<Error | null>(null);
+  const [error, setError] = useState<any>(null);
+  const [operationError, setOperationError] = useState<any>(null);
 
   const clearOperationError = useCallback(() => setOperationError(null), []);
 
   useEffect(() => {
-    // First, check if Firebase itself failed to initialize.
-    if (firebaseInitError) {
-      console.error("Firebase initialization failed.", firebaseInitError);
-      setError(firebaseInitError);
-      setTickets([]);
+    // If Firebase itself failed to initialize, do not proceed.
+    // The App component will show a specific warning.
+    if (initError) {
+      setError(initError);
       setIsLoading(false);
-      return; // Exit early, do not attempt to subscribe.
+      return;
     }
     
-    // Subscribe to real-time ticket updates.
-    // The `unsubscribe` function is returned by streamTickets and will be called on component unmount.
+    // Subscribe to real-time ticket updates from Firebase.
     const unsubscribe = firebaseService.streamTickets(
         (loadedTickets) => {
             setTickets(loadedTickets);
             setIsLoading(false);
             setError(null); // Clear any previous error on success
         },
-        (err) => {
-            console.error("Failed to stream tickets:", err);
-            setError(err);
-            setTickets([]); // On error, do not fall back to mock data.
-            setIsLoading(false); // Ensure loading stops on error
+        (err: any) => {
+            console.error("Failed to stream tickets from Firebase:", err);
+            setError(err); // Capture the specific Firebase error
+            setIsLoading(false); 
         }
     );
     
     // Cleanup subscription on unmount
     return () => unsubscribe();
-  }, []); // Use an empty dependency array to run only once on mount.
+  }, []);
 
   const addTicket = useCallback(async (newTicketData: Omit<Ticket, 'id' | 'createdAt' | 'updatedAt' | 'status'>) => {
     try {
@@ -46,7 +44,7 @@ export const useTickets = () => {
         setOperationError(null);
     } catch (error) {
         console.error("Failed to add ticket", error);
-        setOperationError(error as Error);
+        setOperationError(error);
     }
   }, []);
 
@@ -56,7 +54,7 @@ export const useTickets = () => {
         setOperationError(null);
     } catch (error) {
          console.error("Failed to update ticket", error);
-         setOperationError(error as Error);
+         setOperationError(error);
     }
   }, []);
 

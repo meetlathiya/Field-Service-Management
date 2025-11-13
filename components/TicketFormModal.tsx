@@ -31,7 +31,7 @@ const initialFormState = {
   scheduledDate: '',
 };
 
-const compressImage = async (file: File): Promise<Blob> => {
+const compressImage = async (file: File): Promise<File> => {
     // Use createImageBitmap for better performance and memory management compared to FileReader
     const bitmap = await createImageBitmap(file);
     const { width: originalWidth, height: originalHeight } = bitmap;
@@ -67,7 +67,11 @@ const compressImage = async (file: File): Promise<Blob> => {
         canvas.toBlob(
             (blob) => {
                 if (blob) {
-                    resolve(blob);
+                    const compressedFile = new File([blob], file.name, {
+                        type: 'image/jpeg',
+                        lastModified: Date.now(),
+                    });
+                    resolve(compressedFile);
                 } else {
                     reject(new Error('Canvas to Blob conversion failed.'));
                 }
@@ -107,30 +111,28 @@ export const TicketFormModal: React.FC<TicketFormModalProps> = ({ isOpen, onClos
         setUploadProgress(0);
         setUploadError(null);
 
-        const individualProgresses: number[] = files.map(() => 0);
-        
-        const updateTotalProgress = () => {
-            const total = individualProgresses.reduce((acc, p) => acc + p, 0);
-            const overallPercentage = total / files.length;
-            setUploadProgress(overallPercentage);
-        };
-
         try {
             const compressionPromises = files.map(compressImage);
-            const compressedImageBlobs = await Promise.all(compressionPromises);
+            const compressedImageFiles = await Promise.all(compressionPromises);
 
-            const uploadPromises = compressedImageBlobs.map((imgBlob, index) =>
-                firebaseService.uploadImage(
-                    imgBlob,
+            const newImageUrls: string[] = [];
+            const totalFiles = compressedImageFiles.length;
+
+            for (let i = 0; i < totalFiles; i++) {
+                const imgFile = compressedImageFiles[i];
+
+                // Use the firebaseService for uploading
+                const url = await firebaseService.uploadImage(
+                    imgFile,
                     'ticket-photos',
                     (progress) => {
-                        individualProgresses[index] = progress;
-                        updateTotalProgress();
+                        const overallProgress = ((i + (progress / 100)) / totalFiles) * 100;
+                        setUploadProgress(overallProgress);
                     }
-                )
-            );
+                );
+                newImageUrls.push(url);
+            }
 
-            const newImageUrls = await Promise.all(uploadPromises);
             setFormData(prev => ({...prev, photos: [...prev.photos, ...newImageUrls]}));
         } catch (error) {
             console.error("Error uploading images:", error);

@@ -58,3 +58,13 @@ export enum AppView {
   Dashboard,
   Calendar
 }
+
+export interface UserProfile {
+    uid: string;
+    role: 'admin' | 'technician';
+    technicianId?: number;
+    displayName: string;
+    email: string;
+    // FIX: Add optional photoURL to align with Firebase User object and fix type error in Header component.
+    photoURL?: string | null;
+}

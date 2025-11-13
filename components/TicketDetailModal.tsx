@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo } from 'react';
-import { Ticket, TicketStatus, Technician, TicketUpdatePayload, UrgencyLevel, ServiceType } from '../types';
+import { Ticket, TicketStatus, Technician, TicketUpdatePayload, UrgencyLevel, ServiceType, UserProfile } from '../types';
 import { TECHNICIANS } from '../constants';
 import { CloseIcon, PencilIcon, StarIcon, CameraIcon, PhotoIcon } from './Icons';
 import { SignaturePad } from './SignaturePad';
@@ -11,6 +11,7 @@ interface TicketDetailModalProps {
   ticket: Ticket;
   onUpdate: (firestoreDocId: string, updates: TicketUpdatePayload) => void;
   onUploadError: (error: Error) => void;
+  userProfile: UserProfile;
 }
 
 const statusColors: { [key in TicketStatus]: string } = {
@@ -44,7 +45,7 @@ const formatDateForInput = (date: Date | null | undefined): string => {
     return `${year}-${month}-${day}`;
 };
 
-const compressImage = async (file: File): Promise<Blob> => {
+const compressImage = async (file: File): Promise<File> => {
     // Use createImageBitmap for better performance and memory management compared to FileReader
     const bitmap = await createImageBitmap(file);
     const { width: originalWidth, height: originalHeight } = bitmap;
@@ -80,7 +81,11 @@ const compressImage = async (file: File): Promise<Blob> => {
         canvas.toBlob(
             (blob) => {
                 if (blob) {
-                    resolve(blob);
+                    const compressedFile = new File([blob], file.name, {
+                        type: 'image/jpeg',
+                        lastModified: Date.now(),
+                    });
+                    resolve(compressedFile);
                 } else {
                     reject(new Error('Canvas to Blob conversion failed.'));
                 }
@@ -91,7 +96,7 @@ const compressImage = async (file: File): Promise<Blob> => {
     });
 };
 
-export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, onClose, ticket, onUpdate, onUploadError }) => {
+export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, onClose, ticket, onUpdate, onUploadError, userProfile }) => {
     const [isEditingNotes, setIsEditingNotes] = useState(false);
     const [notes, setNotes] = useState(ticket.notes);
     const [isUploading, setIsUploading] = useState(false);
@@ -120,29 +125,27 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, on
             setUploadProgress(0);
             setUploadError(null);
 
-            const individualProgresses: number[] = files.map(() => 0);
-            const updateTotalProgress = () => {
-                const total = individualProgresses.reduce((acc, p) => acc + p, 0);
-                const overallPercentage = total / files.length;
-                setUploadProgress(overallPercentage);
-            };
-
             try {
                 const compressionPromises = files.map(compressImage);
-                const compressedImageBlobs = await Promise.all(compressionPromises);
+                const compressedImageFiles = await Promise.all(compressionPromises);
                 
-                const uploadPromises = compressedImageBlobs.map((imgBlob, index) =>
-                    firebaseService.uploadImage(
-                        imgBlob, 
+                const newImageUrls: string[] = [];
+                const totalFiles = compressedImageFiles.length;
+
+                for (let i = 0; i < totalFiles; i++) {
+                    const imgFile = compressedImageFiles[i];
+
+                    const url = await firebaseService.uploadImage(
+                        imgFile, 
                         'ticket-photos',
                         (progress) => {
-                            individualProgresses[index] = progress;
-                            updateTotalProgress();
+                            const overallProgress = ((i + (progress / 100)) / totalFiles) * 100;
+                            setUploadProgress(overallProgress);
                         }
-                    )
-                );
+                    );
+                    newImageUrls.push(url);
+                }
                 
-                const newImageUrls = await Promise.all(uploadPromises);
                 handleUpdate('photos', [...ticket.photos, ...newImageUrls]);
             } catch (error) {
                 console.error("Error uploading photos:", error);
@@ -171,6 +174,7 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, on
     
     const isPaidService = ticket.serviceType === ServiceType.ServicePaid || ticket.serviceType === ServiceType.Installation;
     const totalBill = ticket.serviceCharge + ticket.partsCharge;
+    const isTechnician = userProfile.role === 'technician';
 
     if (!isOpen) return null;
 
@@ -204,7 +208,7 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, on
                                     <input type="date" value={formatDateForInput(ticket.scheduledDate)} onChange={handleDateChange} className="w-full rounded-md text-sm border-gray-300 shadow-sm focus:border-primary-light focus:ring-primary-light" />
                                 </DetailItem>
                                 <DetailItem label="Technician">
-                                    <select value={ticket.technicianId || ''} onChange={e => handleUpdate('technicianId', parseInt(e.target.value))} className="w-full rounded-md text-sm border-gray-300 shadow-sm focus:border-primary-light focus:ring-primary-light">
+                                    <select disabled={isTechnician} value={ticket.technicianId || ''} onChange={e => handleUpdate('technicianId', parseInt(e.target.value))} className="w-full rounded-md text-sm border-gray-300 shadow-sm focus:border-primary-light focus:ring-primary-light disabled:bg-gray-100 disabled:cursor-not-allowed">
                                         <option value="">Unassigned</option>
                                         {TECHNICIANS.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                                     </select>
@@ -278,15 +282,15 @@ export const TicketDetailModal: React.FC<TicketDetailModalProps> = ({ isOpen, on
                                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 items-end">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700">Service Charge (₹)</label>
-                                        <input type="number" value={ticket.serviceCharge} onChange={e => handleUpdate('serviceCharge', parseFloat(e.target.value))} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-light focus:ring-primary-light sm:text-sm"/>
+                                        <input type="number" value={ticket.serviceCharge} disabled={isTechnician} onChange={e => handleUpdate('serviceCharge', parseFloat(e.target.value))} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-light focus:ring-primary-light sm:text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700">Parts Charge (₹)</label>
-                                        <input type="number" value={ticket.partsCharge} onChange={e => handleUpdate('partsCharge', parseFloat(e.target.value))} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-light focus:ring-primary-light sm:text-sm"/>
+                                        <input type="number" value={ticket.partsCharge} disabled={isTechnician} onChange={e => handleUpdate('partsCharge', parseFloat(e.target.value))} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-light focus:ring-primary-light sm:text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700">Commission (₹)</label>
-                                        <input type="number" value={ticket.commission} onChange={e => handleUpdate('commission', parseFloat(e.target.value))} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-light focus:ring-primary-light sm:text-sm"/>
+                                        <input type="number" value={ticket.commission} disabled={isTechnician} onChange={e => handleUpdate('commission', parseFloat(e.target.value))} className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-light focus:ring-primary-light sm:text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"/>
                                     </div>
                                     <div className="text-right">
                                          <p className="text-sm font-medium text-gray-500">Total Bill</p>
